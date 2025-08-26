@@ -10,5 +10,6 @@
         public bool IsConfirmed { get; set; }
         public Role Role { get; set; }
         public List<Project> Projects { get; set; } = [];
+        public Guid StageId { get; set; }
     }
 }

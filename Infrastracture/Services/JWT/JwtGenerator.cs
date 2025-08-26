@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
 
-namespace Infrastracture.JWT
+namespace Infrastracture.Services.JWT
 {
     public class JwtGenerator : IJwtGenerator
     {
@@ -30,8 +30,8 @@ namespace Infrastracture.JWT
                 Subject = new ClaimsIdentity
                 ([
                     new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                    new Claim(JwtRegisteredClaimNames.Email, user.Email)
-
+                    new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                    new Claim(ClaimTypes.Role, user.Role.ToString())
                 ]),
 
                 Expires = DateTime.UtcNow.AddMinutes
