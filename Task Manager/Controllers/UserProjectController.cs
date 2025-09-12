@@ -16,7 +16,7 @@ namespace Task_Manager.Controllers
 
         [Authorize]
         [HttpPost("project/commit")]
-        public async Task<IActionResult> 
+        public async Task<IActionResult>
             CommitAsync([FromBody] CommitRequest request)
         {
             var result = await _service.AddCommitAsync(request);
@@ -28,5 +28,19 @@ namespace Task_Manager.Controllers
 
             return Ok(new { Message = result.message });
         }
+
+        [Authorize]
+        [HttpGet("project/get-all-commits")]
+        public async Task<IActionResult> GetAllCommitsAsync()
+        {
+            var result = await _service.GetAllCommitsAsync();
+
+            if (!result.isSucceded)
+            {
+                return BadRequest(new { Message = result.message, Errors = result.errors });
+            }
+            return Ok(new { Message = result.message, result.commits } );
+        }
+
     }
 }
