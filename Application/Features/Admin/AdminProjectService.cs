@@ -116,5 +116,67 @@ namespace Application.Features.Admin
 
             return (true, null, "Project data changed succesfully");
         }
+
+        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+            DeleteProjectAsync(string title)
+        {
+            if (title == null)
+            {
+                return (false, new[]
+                { $"Could`nt find project with title:{title}" }, "Not Found");
+            }
+
+            var project = await _unitOfWork
+                .ProjectRepository.GetByTitleAsync(title);
+
+            if (project == null)
+            {
+                return (false, new[]
+                { $"Could`nt find project with title:{title}" }, "Not Found");
+            }
+
+            _unitOfWork.ProjectRepository.Delete(project);
+            await _unitOfWork.SaveChangesAsync();
+
+            return (true, null, $"Project titled {title} deleted succesfully");
+        }
+
+        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+            AddStagesToProjectAsync(AddStageRequest request)
+        {
+            if (request == null)
+            {
+                return (false, new[] { "Provide valid data" }, "Bad Request");
+            }
+
+            var project = await _unitOfWork
+                .ProjectRepository.GetByIdAsync(request.ProjectId);
+
+            var newStage = new Stage
+            {
+                Id = Guid.NewGuid(),
+                Title = request.Title,
+                ProjectId = request.ProjectId
+            };
+            await _unitOfWork.StageRepository.AddAsync(newStage);
+
+            var stageAssignments = request.AssignedUserIds.Select(userId => new StageAssignment
+            {
+                StageId = newStage.Id,
+                UserId = userId,
+                StageTitle = request.Title,
+                IsCompleted = false
+            }).ToList();
+
+            foreach (var userId in request.AssignedUserIds)
+            {
+                var user = await _unitOfWork.UserRepository.GetByIdAsync(userId);
+                user.StageId = newStage.Id;
+            }
+            await _unitOfWork.StageAssignmentRepository.AddRangeAsync(stageAssignments);
+            await _unitOfWork.SaveChangesAsync();
+
+            return (true, null, "Stage added succesfully");
+        }
     }
 }

@@ -2,6 +2,7 @@ using Application.Features.Admin;
 using Application.Features.Authentication;
 using Application.Features.Authorization;
 using Application.Features.Reset;
+using Application.Features.User;
 using Application.Services.Interfaces;
 using Domain.Abstractions;
 using Infrastracture.Context;
@@ -27,6 +28,7 @@ builder.Services.AddScoped<AuthenticationService>();
 builder.Services.AddScoped<AdminProjectService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AuthorizationService>();
+builder.Services.AddScoped<UserProjectService>();
 builder.Services.AddScoped<ResetService>();
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

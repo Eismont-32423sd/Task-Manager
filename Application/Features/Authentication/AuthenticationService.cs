@@ -43,7 +43,7 @@ namespace Application.Features.Authentication
                 return (false, new[] { "User with such user name already exists" }, "Conflict", null, null);
             }
 
-            var user = new User
+            var user = new Domain.Entities.User
             {
                 Id = Guid.NewGuid(),
                 UserName = registerRequest.UserName,

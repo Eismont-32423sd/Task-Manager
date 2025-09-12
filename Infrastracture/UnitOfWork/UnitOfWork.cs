@@ -8,6 +8,9 @@ namespace Infrastracture.UnitOfWork
     {
         private IUserRepository? _userRepository;
         private IProjectRepository? _projectRepository;
+        private IStageRepository? _stageRepository;
+        private IStageAssignmentRepository? _stageAssignmentRepository;
+        private ICommitRepository? _commitRepository;
         private readonly ApplicationContext _context;
 
         public UnitOfWork(ApplicationContext context)
@@ -27,6 +30,19 @@ namespace Infrastracture.UnitOfWork
             }
         }
 
+        public ICommitRepository CommitRepository
+        {
+            get
+            {
+                if( _commitRepository == null)
+                {
+                    _commitRepository = new CommitRepository( _context );
+                    return _commitRepository;
+                }
+                return _commitRepository;
+            }
+        }
+
         public IProjectRepository ProjectRepository
         {
             get
@@ -37,6 +53,33 @@ namespace Infrastracture.UnitOfWork
                     return _projectRepository;
                 }
                 return _projectRepository;
+            }
+        }
+
+        public IStageRepository StageRepository
+        {
+            get
+            {
+                if( _stageRepository == null )
+                {
+                    _stageRepository = new StageRepository( _context );
+                    return _stageRepository;
+                }
+                return _stageRepository;
+            }
+        }
+
+        public IStageAssignmentRepository StageAssignmentRepository
+        {
+            get
+            {
+                if(_stageAssignmentRepository == null)
+                {
+                    _stageAssignmentRepository = new StageAssignmentRepository( _context );
+                    return _stageAssignmentRepository;
+                }
+
+                return _stageAssignmentRepository;
             }
         }
 

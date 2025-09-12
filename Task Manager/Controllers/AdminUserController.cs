@@ -72,5 +72,23 @@ namespace Task_Manager.Controllers
 
             return Ok(new {Message = result.message});
         }
+
+        [HttpDelete("users/delete/username={userName}")]
+        [Authorize(Roles = "TeamLead")]
+        public async Task<IActionResult> DeleteUserAsync(string userName)
+        {
+            var result = await _service.DeleteUserAsync(userName);
+
+            if (!result.isSucceded)
+            {
+                return BadRequest(new
+                {
+                    Errors = result.errors,
+                    Message = result.message
+                }); 
+            }
+
+            return Ok(new {Message = result.message});
+        }
     }
 }

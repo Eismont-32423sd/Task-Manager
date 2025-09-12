@@ -11,5 +11,6 @@
         public Role Role { get; set; }
         public List<Project> Projects { get; set; } = [];
         public Guid StageId { get; set; }
+        public List<StageAssignment> StageAssignments { get; set; } = [];
     }
 }

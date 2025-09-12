@@ -9,6 +9,9 @@ namespace Infrastracture.Context
     {
         public DbSet<User> Users { get; set; }
         public DbSet<Project> Projects { get; set; }
+        public DbSet<Stage> Stages { get; set; }
+        public DbSet<StageAssignment> StageAssignments { get; set; }
+        public DbSet<Commit> Commitments { get; set; }
 
         public ApplicationContext
             (DbContextOptions<ApplicationContext> options) : base(options)
@@ -16,17 +19,27 @@ namespace Infrastracture.Context
 
         }
 
-        protected override void OnModelCreating(ModelBuilder builder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(builder);
+            modelBuilder.Entity<StageAssignment>()
+                .HasKey(sa => new { sa.StageId, sa.UserId });
 
-            builder.Entity<Project>()
-                .HasMany(p => p.Participants)
-                .WithMany(u => u.Projects) 
-                .UsingEntity(j => j.ToTable("ProjectParticipants"));
+            modelBuilder.Entity<StageAssignment>()
+                .HasOne(sa => sa.Stage)
+                .WithMany(s => s.Assignments)
+                .HasForeignKey(sa => sa.StageId);
 
-            builder.Entity<User>().HasMany(p => p.Projects);
+            modelBuilder.Entity<StageAssignment>()
+                .HasOne(sa => sa.User)
+                .WithMany(u => u.StageAssignments)
+                .HasForeignKey(sa => sa.UserId);
 
+            modelBuilder.Entity<Commit>()
+                .HasOne<StageAssignment>()
+                .WithMany(sa => sa.Commits)
+                .HasForeignKey(c => new { c.StageAssignmentStageId, c.StageAssignmentUserId });
+
+            base.OnModelCreating(modelBuilder);
         }
     }
 }

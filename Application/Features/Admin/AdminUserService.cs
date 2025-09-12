@@ -13,9 +13,9 @@ namespace Application.Features.Admin
         }
 
         public async Task<(bool isSucceded, IEnumerable<string>? errors,
-            string message, List<User>? users)> GetAllUsersAsync()
+            string message, List<Domain.Entities.User>? users)> GetAllUsersAsync()
         {
-            List<User> users = (List<User>)await _unitOfWork.UserRepository.GetAllAsync();
+            List<Domain.Entities.User> users = (List<Domain.Entities.User>)await _unitOfWork.UserRepository.GetAllAsync();
 
             if (users == null)
             {
@@ -73,6 +73,23 @@ namespace Application.Features.Admin
             await _unitOfWork.SaveChangesAsync();
 
             return (true, null, "Role assign to user succesfully");
+        }
+
+        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+            DeleteUserAsync(string userName)
+        {
+            if (userName == null)
+            {
+                return (false, new[] { $"Couldn`t find user with username:{userName}" }, "Not Found");
+            }
+
+            var user = await _unitOfWork.
+                UserRepository.GetByUserNameAsync(userName);
+
+            _unitOfWork.UserRepository.Delete(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return (true, null, "User removed succesfully");
         }
     }
 }
