@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+﻿using Domain.Entities.DbEntities;
 
 namespace Application.Services.Interfaces
 {

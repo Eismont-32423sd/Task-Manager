@@ -1,6 +1,6 @@
 ﻿using Application.Services.DTOs.PorjectDTOs;
 using Domain.Abstractions;
-using Domain.Entities;
+using Domain.Entities.DbEntities;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using Serilog.Core;

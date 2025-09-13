@@ -1,5 +1,5 @@
 ﻿using Domain.Abstractions;
-using Domain.Entities;
+using Domain.Entities.DbEntities;
 using Infrastracture.Context;
 
 namespace Infrastracture.Repositories

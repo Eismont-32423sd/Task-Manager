@@ -1,8 +1,6 @@
 ﻿using Application.Services.DTOs.AuthenticationDTOS;
 using Application.Services.Interfaces;
 using Domain.Abstractions;
-using Domain.Entities;
-using FluentEmail.Core;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
@@ -12,24 +10,20 @@ namespace Application.Features.Authentication
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
-        private readonly IJwtGenerator _jwtGenerator;
-        private readonly IFluentEmail _emailFactory;
         private readonly ILogger<AuthenticationService> _logger;
+
+
         public AuthenticationService(IUnitOfWork unitOfWork,
                               IPasswordHasher passwordHasher,
-                              IJwtGenerator jwtGenerator,
-                              IFluentEmail emailFactory,
                               ILogger<AuthenticationService> logger)
         {
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
-            _jwtGenerator = jwtGenerator;
-            _emailFactory = emailFactory;
             _logger = logger;
         }
 
         public async Task<(bool isSucceded, IEnumerable<string>? errors,
-            string message, string? ConfiramationToken, Guid? UserId)>
+            string message)>
             RegisterAsync(RegisterRequest registerRequest, string confirmationLinkBaseUrl)
         {
             using (LogContext.PushProperty("Operation", nameof(RegisterAsync)))
@@ -42,22 +36,22 @@ namespace Application.Features.Authentication
                 if (existingUserbyEmail != null)
                 {
                     _logger.LogError($"User with such email already exists, {existingUserbyEmail.Email}");
-                    return (false, new[] { "User with such email already exists" }, "Conflict", null, null);
+                    return (false, new[] { "User with such email already exists" }, "Conflict");
                 }
 
                 if (existingUserByUserName != null)
                 {
                     _logger.LogError($"User with such username already exists, {existingUserByUserName.UserName}");
-                    return (false, new[] { "User with such user name already exists" }, "Conflict", null, null);
+                    return (false, new[] { "User with such user name already exists" }, "Conflict");
                 }
 
-                var user = new Domain.Entities.User
+                var user = new Domain.Entities.DbEntities.User
                 {
                     Id = Guid.NewGuid(),
                     UserName = registerRequest.UserName,
                     Email = registerRequest.Email,
                     PasswordHash = _passwordHasher.Hash(registerRequest.Password!),
-                    IsConfirmed = false
+                    IsConfirmed = true
                 };
                 //var adminUser = new User
                 //{
@@ -71,31 +65,31 @@ namespace Application.Features.Authentication
                 //await _unitOfWork.UserRepository.AddAsync(adminUser);
                 //await _unitOfWork.SaveChangesAsync();
 
-                var confirmationToken = _jwtGenerator.CreateJwtToken(user);
-                user.ConfirmationToken = confirmationToken;
+                //var confirmationToken = _jwtGenerator.CreateJwtToken(user);
+                //user.ConfirmationToken = confirmationToken;
 
                 await _unitOfWork.UserRepository.AddAsync(user);
                 await _unitOfWork.SaveChangesAsync();
 
-                var confirmationLink = $"{confirmationLinkBaseUrl}?userId={user.Id}&token={Uri.EscapeDataString(confirmationToken)}";
+                //var confirmationLink = $"{confirmationLinkBaseUrl}?userId={user.Id}&token={Uri.EscapeDataString(confirmationToken)}";
 
-                try
-                {
-                    _logger.LogInformation("Attemp to send verification email");
-                    await _emailFactory.To(user.Email)
-                        .Subject("Email verification for Task Manager")
-                        .Body($"To verify you email <a href='{confirmationLink}'>click here</a>", isHtml: true)
-                        .SendAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError("Failed to send confirmation email.");
-                    return (false, new[] { "Failed to send confirmation email." },
-                        $"User registered, but failed to send confirmation email. {ex.Message}", null, null);
-                }
+                //try
+                //{
+                //    _logger.LogInformation("Attemp to send verification email");
+                //    await _emailFactory.To(user.Email)
+                //        .Subject("Email verification for Task Manager")
+                //        .Body($"To verify you email <a href='{confirmationLink}'>click here</a>", isHtml: true)
+                //        .SendAsync();
+                //}
+                //catch (Exception ex)
+                //{
+                //    _logger.LogError("Failed to send confirmation email.");
+                //    return (false, new[] { "Failed to send confirmation email." },
+                //        $"User registered, but failed to send confirmation email. {ex.Message}", null, null);
+                //}
 
                 _logger.LogInformation("User registered succesfully");
-                return (true, null, "User registered succesfully", confirmationToken, user.Id);
+                return (true, null, "User registered succesfully");
             }
         }
 

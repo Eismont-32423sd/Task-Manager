@@ -17,11 +17,11 @@ namespace Application.Features.Admin
         }
 
         public async Task<(bool isSucceded, IEnumerable<string>? errors,
-            string message, List<Domain.Entities.User>? users)> GetAllUsersAsync()
+            string message, List<Domain.Entities.DbEntities.User>? users)> GetAllUsersAsync()
         {
             using (LogContext.PushProperty("Operation", nameof(GetAllUsersAsync)))
             {
-                List<Domain.Entities.User> users = (List<Domain.Entities.User>)await _unitOfWork.UserRepository.GetAllAsync();
+                List<Domain.Entities.DbEntities.User> users = (List<Domain.Entities.DbEntities.User>)await _unitOfWork.UserRepository.GetAllAsync();
 
                 if (users == null)
                 {

@@ -1,7 +1,7 @@
 ﻿using Application.Services.DTOs.AuthenticationDTOS;
 using Application.Services.DTOs.PorjectDTOs;
 using Domain.Abstractions;
-using Domain.Entities;
+using Domain.Entities.DbEntities;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
@@ -81,11 +81,11 @@ namespace Application.Features.Admin
         }
 
         public async Task<(bool isSucceded, IEnumerable<string>? errors, string message, Project? project)>
-            GetProjectByIdAsync(Guid projectId)
+            GetProjectByIdAsync(Guid porjectId)
         {
             using (LogContext.PushProperty("Operation", nameof(GetProjectByIdAsync)))
             {
-                if (projectId == Guid.Empty)
+                if (porjectId == Guid.Empty)
                 {
                     _logger.LogError("Provide valid project id");
                     return (false, new[] { "Provide valid project id" },
@@ -93,12 +93,12 @@ namespace Application.Features.Admin
                 }
 
                 var project = await _unitOfWork.ProjectRepository
-                    .GetByIdAsync(projectId);
+                    .GetByIdAsync(porjectId);
                 if (project == null)
                 {
-                    _logger.LogError($"Unable to find project with id = {projectId}");
+                    _logger.LogError($"Unable to find project with id = {porjectId}");
                     return (false, new[] { $"Unable to find project with id = " +
-                    $"{projectId}" }, "Error", null);
+                    $"{porjectId}" }, "Error", null);
                 }
 
                 _logger.LogInformation("Project retrieved succesfully");
@@ -179,7 +179,7 @@ namespace Application.Features.Admin
         public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
             AddStagesToProjectAsync(AddStageRequest request)
         {
-            using (LogContext.PushProperty("Operation", nameof(DeleteProjectAsync)))
+            using (LogContext.PushProperty("Operation", nameof(AddStagesToProjectAsync)))
             {
                 if (request == null)
                 {

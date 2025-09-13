@@ -1,5 +1,5 @@
 ﻿using Application.Services.Interfaces;
-using Domain.Entities;
+using Domain.Entities.DbEntities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;

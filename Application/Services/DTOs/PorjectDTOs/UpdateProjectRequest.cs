@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+﻿using Domain.Entities.Enums;
 
 namespace Application.Services.DTOs.PorjectDTOs
 {

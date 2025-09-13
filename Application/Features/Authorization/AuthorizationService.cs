@@ -50,6 +50,8 @@ namespace Application.Features.Authorization
                 }
 
                 var verificationToken = _jwtGenerator.CreateJwtToken(user);
+                user.ConfirmationToken = verificationToken;
+                await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("User logged in");
                 return (true, null, "Logged in succesfully", verificationToken);

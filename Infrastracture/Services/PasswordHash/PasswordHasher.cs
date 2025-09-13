@@ -21,17 +21,24 @@ namespace Infrastracture.Services.PasswordHash
 
         public bool Verify(string password, string hashedPassword)
         {
-            var pars = hashedPassword.Split('-');
-            if (pars.Length != 2)
+            try
+            {
+                var pars = hashedPassword.Split('-');
+                if (pars.Length != 2)
+                {
+                    return false;
+                }
+
+                var hash = Convert.FromHexString(pars[0]);
+                var salt = Convert.FromHexString(pars[1]);
+                var inputHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, Algorithm, HashSize);
+
+                return CryptographicOperations.FixedTimeEquals(hash, inputHash);
+            }
+            catch (FormatException)
             {
                 return false;
             }
-
-            var hash = Convert.FromHexString(pars[0]);
-            var salt = Convert.FromHexString(pars[1]);
-            var inputHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, Algorithm, HashSize);
-
-            return CryptographicOperations.FixedTimeEquals(hash, inputHash);
         }
     }
 }
