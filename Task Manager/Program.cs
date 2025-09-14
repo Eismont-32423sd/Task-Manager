@@ -111,6 +111,19 @@ try
 
     app.MapControllers();
 
+    var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>(); 
+
+    try
+    {
+        dbContext.Database.Migrate();
+        Console.WriteLine("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
+    }
+
     app.Run();
 }
 catch(Exception ex)
