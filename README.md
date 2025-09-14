@@ -18,3 +18,7 @@ Open in your browser:
 http://localhost:5000/swagger
 Register a new user (username, email, password).
 Login and authorize with the JWT as described above.
+Project status, porject type, roles are described as enums
+Project status: 0 - dvelopment, 1 - deployment, 2 - maintance, 3 - planning, 4 - complted, 5 - cancelled.
+Project type: 0 - PetProject, 1 - small project, 2 - enterprise level.
+Roles: 0 -manager, 1 - developer, 2 - tester, 3 - TeamLead, 4 -DevOps, 5 - designer (Manager and TeamLead are considered to be admin roles).
