@@ -9,6 +9,4 @@ namespace Application.Services.DTOs.PorjectDTOs
         public string? Description { get; set; }
         public List<UserDto> Participants { get; set; } = [];
     }
-
-
 }

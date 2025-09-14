@@ -31,7 +31,8 @@ namespace InfrastractureTests
         [Theory]
         [InlineData("CorrectPassword", "CorrectPassword", true)]
         [InlineData("CorrectPassword", "IncorrectPassword", false)]
-        public void Verify_ShouldReturnExpectedResult(string passwordToHash, string passwordToVerify, bool expectedResult)
+        public void Verify_ShouldReturnExpectedResult(string passwordToHash, 
+            string passwordToVerify, bool expectedResult)
         {
             string hashedPassword = _passwordHasher.Hash(passwordToHash);
 

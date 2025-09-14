@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.DbEntities;
+using Domain.Entities.Enums;
 using Infrastracture.Context;
 using Infrastracture.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -16,37 +17,56 @@ namespace InfrastractureTests
         }
         #region GenericRepo
         [Fact]
-        public async Task AddAsync_AddsUserToDatabase()
-        {
-            var context = GetInMemoryContext();
-            var repo = new UserRepository(context);
-            var user = new User { Id = Guid.NewGuid(),
-                Email = "test@test.com", UserName = "testuser" };
-
-            await repo.AddAsync(user);
-            await context.SaveChangesAsync();
-
-            var result = await repo.GetByIdAsync(user.Id);
-            Assert.NotNull(result);
-            Assert.Equal("testuser", result.UserName);
-        }
-
-        [Fact]
         public async Task GetAllAsync_ReturnsAllUsers()
         {
             var context = GetInMemoryContext();
             var repo = new UserRepository(context);
-            var user1 = new User { Id = Guid.NewGuid(), 
-                Email = "a@a.com", UserName = "user1" };
-            var user2 = new User { Id = Guid.NewGuid(),
-                Email = "b@b.com", UserName = "user2" };
+            var user1 = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "a@a.com",
+                UserName = "user1",
+                PasswordHash = "hash1",
+                Role = Role.Developer
+            };
+            var user2 = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "b@b.com",
+                UserName = "user2",
+                PasswordHash = "hash2",
+                Role = Role.Tester
+            };
 
             await repo.AddAsync(user1);
             await repo.AddAsync(user2);
             await context.SaveChangesAsync();
 
             var users = await repo.GetAllAsync();
-            Assert.Equal(2, System.Linq.Enumerable.Count(users));
+            Assert.Equal(2, users.Count());
+        }
+
+        [Fact]
+        public async Task AddAsync_AddsUserToDatabase()
+        {
+            var context = GetInMemoryContext();
+            var repo = new UserRepository(context);
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "newuser@test.com",
+                UserName = "newuser",
+                PasswordHash = "newhash",
+                Role = Role.Developer
+            };
+
+            await repo.AddAsync(user);
+            await context.SaveChangesAsync();
+
+            var userInDb = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+            Assert.NotNull(userInDb);
+            Assert.Equal("newuser", userInDb.UserName);
+            Assert.Equal("newuser@test.com", userInDb.Email);
         }
 
         [Fact]
@@ -54,13 +74,22 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new UserRepository(context);
-            var user = new User { Id = Guid.NewGuid(), 
-                Email = "delete@me.com", UserName = "deleteuser" };
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "unique@email.com",
+                UserName = "emailuser",
+                PasswordHash = "testhash",
+                Role = Role.Developer
+            };
 
             await repo.AddAsync(user);
             await context.SaveChangesAsync();
 
-            repo.Delete(user);
+            var userInDb = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+            Assert.NotNull(userInDb);
+
+            repo.Delete(userInDb!);
             await context.SaveChangesAsync();
 
             var result = await repo.GetByIdAsync(user.Id);
@@ -74,8 +103,14 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new UserRepository(context);
-            var user = new User { Id = Guid.NewGuid(), 
-                Email = "unique@email.com", UserName = "emailuser" };
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "unique@email.com",
+                UserName = "emailuser",
+                PasswordHash = "testhash",
+                Role = Role.Developer
+            };
 
             await repo.AddAsync(user);
             await context.SaveChangesAsync();
@@ -83,6 +118,7 @@ namespace InfrastractureTests
             var result = await repo.GetByEmailAsync("unique@email.com");
             Assert.NotNull(result);
             Assert.Equal("emailuser", result.UserName);
+            Assert.Equal("unique@email.com", result.Email);
         }
 
         [Fact]
@@ -90,8 +126,14 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new UserRepository(context);
-            var user = new User { Id = Guid.NewGuid(), 
-                Email = "user@name.com", UserName = "specialuser" };
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "user@name.com",
+                UserName = "specialuser",
+                PasswordHash = "hash",
+                Role = Role.Developer
+            };
 
             await repo.AddAsync(user);
             await context.SaveChangesAsync();
@@ -99,6 +141,7 @@ namespace InfrastractureTests
             var result = await repo.GetByUserNameAsync("specialuser");
             Assert.NotNull(result);
             Assert.Equal("user@name.com", result.Email);
+            Assert.Equal("specialuser", result.UserName);
         }
         #endregion
         #region ProjectRepository
@@ -107,9 +150,12 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new ProjectRepository(context);
-            var project = new Project { Id = Guid.NewGuid(), 
-                Title = "Test Project", 
-                StartDate = DateOnly.FromDateTime(DateTime.Today) };
+            var project = new Project
+            {
+                Id = Guid.NewGuid(),
+                Title = "Test Project",
+                StartDate = DateOnly.FromDateTime(DateTime.Today)
+            };
 
             await repo.AddAsync(project);
             await context.SaveChangesAsync();
@@ -124,9 +170,12 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new ProjectRepository(context);
-            var project = new Project { Id = Guid.NewGuid(), 
-                Title = "EndDate Project", 
-                EndDate = DateOnly.FromDateTime(DateTime.Today) };
+            var project = new Project
+            {
+                Id = Guid.NewGuid(),
+                Title = "EndDate Project",
+                EndDate = DateOnly.FromDateTime(DateTime.Today)
+            };
 
             await repo.AddAsync(project);
             await context.SaveChangesAsync();
@@ -141,9 +190,12 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new ProjectRepository(context);
-            var project = new Project { Id = Guid.NewGuid(), 
-                Title = "StartDate Project", 
-                StartDate = DateOnly.FromDateTime(DateTime.Today) };
+            var project = new Project
+            {
+                Id = Guid.NewGuid(),
+                Title = "StartDate Project",
+                StartDate = DateOnly.FromDateTime(DateTime.Today)
+            };
 
             await repo.AddAsync(project);
             await context.SaveChangesAsync();
@@ -173,17 +225,31 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new ProjectRepository(context);
-            var user = new User { Id = Guid.NewGuid(), UserName = "participant" };
-            var project = new Project { Id = Guid.NewGuid(), 
-                Title = "WithParticipants", Participants = new List<User> { user } };
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                UserName = "participant",
+                Email = "participant@test.com",
+                PasswordHash = "hash",
+                Role = Role.Developer
+            };
+            var project = new Project
+            {
+                Id = Guid.NewGuid(),
+                Title = "WithParticipants",
+                Participants = new List<User> { user }
+            };
 
             await context.Users.AddAsync(user);
-            await repo.AddAsync(project);
+            await context.Projects.AddAsync(project);
             await context.SaveChangesAsync();
 
             var result = await repo.GetAllWithParticipantsAsync();
+
             Assert.Single(result);
             Assert.Single(result.First().Participants);
+            Assert.Equal("participant", result.First().Participants.First().UserName);
         }
         #endregion
 
@@ -210,14 +276,18 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new StageAssignmentRepository(context);
-            var assignment = new StageAssignment { StageId = Guid.NewGuid(), 
-                UserId = Guid.NewGuid(), StageTitle = "Assignment1" };
+            var assignment = new StageAssignment
+            {
+                StageId = Guid.NewGuid(),
+                UserId = Guid.NewGuid(),
+                StageTitle = "Assignment1"
+            };
 
             await repo.AddAsync(assignment);
             await context.SaveChangesAsync();
 
             var result = await context.StageAssignments
-            .FirstOrDefaultAsync(sa => sa.StageId == assignment.StageId 
+            .FirstOrDefaultAsync(sa => sa.StageId == assignment.StageId
             && sa.UserId == assignment.UserId);
             Assert.NotNull(result);
             Assert.Equal("Assignment1", result.StageTitle);
@@ -230,9 +300,9 @@ namespace InfrastractureTests
             var repo = new StageAssignmentRepository(context);
             var assignments = new List<StageAssignment>
             {
-                new StageAssignment { StageId = Guid.NewGuid(), 
+                new StageAssignment { StageId = Guid.NewGuid(),
                     UserId = Guid.NewGuid(), StageTitle = "A1" },
-                new StageAssignment { StageId = Guid.NewGuid(), 
+                new StageAssignment { StageId = Guid.NewGuid(),
                     UserId = Guid.NewGuid(), StageTitle = "A2" }
             };
 
@@ -248,8 +318,12 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new StageAssignmentRepository(context);
-            var assignment = new StageAssignment { StageId = Guid.NewGuid(), 
-                UserId = Guid.NewGuid(), StageTitle = "SpecialTitle" };
+            var assignment = new StageAssignment
+            {
+                StageId = Guid.NewGuid(),
+                UserId = Guid.NewGuid(),
+                StageTitle = "SpecialTitle"
+            };
 
             await repo.AddAsync(assignment);
             await context.SaveChangesAsync();
@@ -266,8 +340,12 @@ namespace InfrastractureTests
         {
             var context = GetInMemoryContext();
             var repo = new CommitRepository(context);
-            var commit = new Commit { Id = Guid.NewGuid(), Message = "Initial commit", 
-                CommitDate = DateOnly.FromDateTime(DateTime.Today) };
+            var commit = new Commit
+            {
+                Id = Guid.NewGuid(),
+                Message = "Initial commit",
+                CommitDate = DateOnly.FromDateTime(DateTime.Today)
+            };
 
             await repo.AddAsync(commit);
             await context.SaveChangesAsync();

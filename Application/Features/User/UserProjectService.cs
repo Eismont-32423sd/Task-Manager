@@ -1,4 +1,5 @@
-﻿using Application.Services.DTOs.PorjectDTOs;
+﻿using Application.Services.DTOs.Generic;
+using Application.Services.DTOs.PorjectDTOs;
 using Domain.Abstractions;
 using Domain.Entities.DbEntities;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,7 @@ namespace Application.Features.User
             _logger = logger;
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             AddCommitAsync(CommitRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(AddCommitAsync)))
@@ -26,7 +27,13 @@ namespace Application.Features.User
                 if (request == null)
                 {
                     _logger.LogError($"Provided invalid commit request, {request}");
-                    return (false, new[] { "Please provide valid data" }, "Error");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Please provide valid data" },
+                        Message = "Error",
+                        Data = null
+                    };
                 }
 
                 var user = await _unitOfWork.UserRepository.GetByUserNameAsync(request.UserName);
@@ -35,7 +42,13 @@ namespace Application.Features.User
                 if (stageAssignment == null)
                 {
                     _logger.LogError($"Error, user {user.UserName} is not assigned to the stage");
-                    return (false, new[] { "User is not assigned to this stage." }, "Error");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Error, user {user.UserName} is not assigned to the stage" },
+                        Message = "Error",
+                        Data = null
+                    };
                 }
 
                 var newCommit = new Commit
@@ -50,23 +63,41 @@ namespace Application.Features.User
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Commit created successfully");
-                return (true, null, "Commit added successfully.");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Commit created successfully",
+                    Data = null
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message, List<Commit>? commits)>
-            GetAllCommitsAsync()
+        public async Task<ServiceResult<List<Commit>>>
+            GetAllCommitsAsync(Guid userId)
         {
             using (LogContext.PushProperty("Operation", nameof(GetAllCommitsAsync)))
             {
-                List<Commit> commitments = (List<Commit>)await _unitOfWork.CommitRepository.GetAllAsync();
-                if (commitments == null)
+                var commits = await _unitOfWork.CommitRepository.GetUserCommitsAsync(userId);
+
+                if (!commits.Any())
                 {
-                    _logger.LogInformation("Zero commitments");
-                    return (false, new[] { "Couldn`t find any commits" }, "Errors", null);
+                    return new ServiceResult<List<Commit>>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "No commits found for this user" },
+                        Message = "Error",
+                        Data = null
+                    };
                 }
-                _logger.LogInformation("Commits retrieved succesfully");
-                return (true, null, "Commits retrieved succesfully", commitments);
+
+                return new ServiceResult<List<Commit>>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Commits retrieved successfully",
+                    Data = commits
+                };
             }
         }
     }

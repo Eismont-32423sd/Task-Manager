@@ -18,6 +18,5 @@ namespace Domain.Entities.DbEntities
         public ProjectType ProjectType { get; set; }
         public ProjectStatus Status { get; set; } = ProjectStatus.Planning;
         public List<User> Participants { get; set; } = [];
-        public Guid? OwnerId { get; set; }
     }
 }

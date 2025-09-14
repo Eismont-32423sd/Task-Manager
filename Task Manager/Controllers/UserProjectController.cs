@@ -2,11 +2,12 @@
 using Application.Services.DTOs.PorjectDTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Task_Manager.Controllers
 {
     [ApiController]
-    public class UserProjectController : Controller
+    public class UserProjectController : BaseController
     {
         private readonly UserProjectService _service;
         public UserProjectController(UserProjectService service)
@@ -19,27 +20,20 @@ namespace Task_Manager.Controllers
         public async Task<IActionResult>
             CommitAsync([FromBody] CommitRequest request)
         {
-            var result = await _service.AddCommitAsync(request);
-
-            if (!result.isSucceded)
-            {
-                return BadRequest(new { Message = result.message, Errors = result.errors });
-            }
-
-            return Ok(new { Message = result.message });
+            return await HandleServiceCallAsync(() => _service.AddCommitAsync(request));
         }
 
         [Authorize]
         [HttpGet("project/get-all-commits")]
         public async Task<IActionResult> GetAllCommitsAsync()
         {
-            var result = await _service.GetAllCommitsAsync();
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdClaim == null)
+                return Unauthorized("Invalid token: missing user id");
 
-            if (!result.isSucceded)
-            {
-                return BadRequest(new { Message = result.message, Errors = result.errors });
-            }
-            return Ok(new { Message = result.message, result.commits } );
+            var userId = Guid.Parse(userIdClaim);
+
+            return await HandleServiceCallAsync(() => _service.GetAllCommitsAsync(userId));
         }
 
     }

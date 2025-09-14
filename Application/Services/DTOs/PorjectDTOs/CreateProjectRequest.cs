@@ -10,6 +10,6 @@ namespace Application.Services.DTOs.PorjectDTOs
         public string? Description { get; set; }
         public ProjectType ProjectType { get; set; }
         public ProjectStatus Status { get; set; } = ProjectStatus.Planning;
-        public Guid? OwnerId { get; set; }
+        //public Guid? OwnerId { get; set; }
     }
 }

@@ -43,5 +43,4 @@ namespace InfrastractureTests
             _contextMock.Verify(c => c.SaveChangesAsync(default), Times.Once);
         }
     }
-
 }

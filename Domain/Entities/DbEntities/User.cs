@@ -18,10 +18,8 @@ namespace Domain.Entities.DbEntities
         [MaxLength(50)]
         public string? Email { get; set; }
         [Required]
-        [MaxLength(50)]
+        [MaxLength(250)]
         public string? PasswordHash { get; set; }
-
-        [MaxLength(150)]
         public string? ConfirmationToken { get; set; }
         public bool IsConfirmed { get; set; }
         public Role Role { get; set; }

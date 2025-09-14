@@ -1,4 +1,5 @@
 ﻿using Application.Services.DTOs.AuthenticationDTOS;
+using Application.Services.DTOs.Generic;
 using Application.Services.Interfaces;
 using Domain.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,7 @@ namespace Application.Features.Authorization
             _logger = logger;
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string> errors, string message, string? token)>
+        public async Task<ServiceResult<string>>
             LoginAsync(LoginRequest loginRequest)
         {
             using (LogContext.PushProperty("Operation", nameof(LoginAsync)))
@@ -34,19 +35,37 @@ namespace Application.Features.Authorization
                 if (user == null)
                 {
                     _logger.LogError("Inavalid username");
-                    return (false, new[] { "User with such username doesn`t exist" }, "Conflict", null);
+                    return new ServiceResult<string>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "User with such username doesn`t exist" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 if (!_passwordHasher.Verify(loginRequest.Password!, user.PasswordHash!))
                 {
                     _logger.LogError("Password doesn`t match");
-                    return (false, new[] { "Password doesn`t match" }, "Conflict", null);
+                    return new ServiceResult<string>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Password doesn`t match" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 if (!user.IsConfirmed)
                 {
                     _logger.LogError("User didn`t confirm credeantials");
-                    return (false, new[] { "You did`nt confirm your data, please check your email box" }, "Conflict", null);
+                    return new ServiceResult<string>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Some error ocured" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 var verificationToken = _jwtGenerator.CreateJwtToken(user);
@@ -54,7 +73,13 @@ namespace Application.Features.Authorization
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("User logged in");
-                return (true, null, "Logged in succesfully", verificationToken);
+                return new ServiceResult<string>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "User logged in succesfully",
+                    Data = verificationToken
+                };
             }
         }
     }

@@ -1,4 +1,5 @@
 ﻿using Application.Services.DTOs.AuthenticationDTOS;
+using Application.Services.DTOs.Generic;
 using Application.Services.DTOs.PorjectDTOs;
 using Domain.Abstractions;
 using Domain.Entities.DbEntities;
@@ -18,8 +19,7 @@ namespace Application.Features.Admin
             _logger = logger;
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors,
-                string message, List<ProjectDto>? projects)> GetAllProjectsAsync()
+        public async Task<ServiceResult<List<ProjectDto>>> GetAllProjectsAsync()
         {
             using (LogContext.PushProperty("Operation", nameof(GetAllProjectsAsync)))
             {
@@ -28,7 +28,12 @@ namespace Application.Features.Admin
                 if (projects == null || !projects.Any())
                 {
                     _logger.LogError("There are no available projects");
-                    return (false, new[] { "There are no available projects" }, "Conflict", null);
+                    return new ServiceResult<List<ProjectDto>>
+                    {
+                        IsSucceded = false,
+                        Message = "Conflict",
+                        Errors = new[] { "There are no available projects" }
+                    };
                 }
 
                 var projectDtos = projects.Select(p => new ProjectDto
@@ -43,21 +48,31 @@ namespace Application.Features.Admin
                     }).ToList()
                 }).ToList();
 
-                _logger.LogInformation("Retrieved projects succesfully");
-                return (true, null, "Retrieved projects", projectDtos);
+                _logger.LogInformation("Retrieved projects successfully");
+
+                return new ServiceResult<List<ProjectDto>>
+                {
+                    IsSucceded = true,
+                    Message = "Retrieved projects",
+                    Data = projectDtos
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
-            CreateProjectAsync(CreateProjectRequest request)
+
+        public async Task<ServiceResult<object>> CreateProjectAsync(CreateProjectRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(CreateProjectAsync)))
             {
-
                 if (request == null)
                 {
                     _logger.LogError("Error occured while creating new project");
-                    return (false, new[] { "Error occured while creating new project" }, "Error");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Message = "Error",
+                        Errors = new[] { "Error occured while creating new project" }
+                    };
                 }
 
                 var project = new Project
@@ -69,18 +84,21 @@ namespace Application.Features.Admin
                     EndDate = request.EndDate,
                     ProjectType = request.ProjectType,
                     Status = request.Status,
-                    OwnerId = request.OwnerId
                 };
 
                 await _unitOfWork.ProjectRepository.AddAsync(project);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Project added succesfully");
-                return (true, null, "Project added succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Message = "Project added succesfully"
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message, Project? project)>
+        public async Task<ServiceResult<Project>>
             GetProjectByIdAsync(Guid porjectId)
         {
             using (LogContext.PushProperty("Operation", nameof(GetProjectByIdAsync)))
@@ -88,25 +106,38 @@ namespace Application.Features.Admin
                 if (porjectId == Guid.Empty)
                 {
                     _logger.LogError("Provide valid project id");
-                    return (false, new[] { "Provide valid project id" },
-                        "Error", null);
+                    return new ServiceResult<Project>
+                    {
+                        IsSucceded = false,
+                        Message = "Provide valid project id",
+                        Data = null
+                    };
                 }
 
                 var project = await _unitOfWork.ProjectRepository
                     .GetByIdAsync(porjectId);
                 if (project == null)
                 {
-                    _logger.LogError($"Unable to find project with id = {porjectId}");
-                    return (false, new[] { $"Unable to find project with id = " +
-                    $"{porjectId}" }, "Error", null);
+                    _logger.LogError($"Unable to find project with id = {porjectId}");;
+                    return new ServiceResult<Project>
+                    {
+                        IsSucceded = false,
+                        Message = $"Unable to find project with id = {porjectId}",
+                        Data = null
+                    };
                 }
 
                 _logger.LogInformation("Project retrieved succesfully");
-                return (true, null, "Project retrieved succesfully", project);
+                return new ServiceResult<Project>
+                {
+                    IsSucceded = true,
+                    Message = "Project retrieved succesfully",
+                    Data = project
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             UpdateProjectAsync(string projectTitle, UpdateProjectRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(UpdateProjectAsync)))
@@ -115,13 +146,25 @@ namespace Application.Features.Admin
                 if (projectTitle == null)
                 {
                     _logger.LogError("Please provide project title");
-                    return (false, new[] { "Please provide project title" }, "Not Found");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Please provide project title" },
+                        Message = "Not Found",
+                        Data = null
+                    };
                 }
 
                 if (request == null)
                 {
                     _logger.LogError("Invalid update data");
-                    return (false, new[] { "Invalid update data" }, "Conflict");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Invalid update data" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 var project = await _unitOfWork
@@ -129,7 +172,13 @@ namespace Application.Features.Admin
                 if (project == null)
                 {
                     _logger.LogError($"Couldn`t find porject with title {projectTitle}");
-                    return (false, new[] { $"Couldn`t find porject with title {projectTitle}" }, "Not Found");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Couldn`t find porject with title {projectTitle}" },
+                        Message = "Not Found",
+                        Data = null
+                    };
                 }
 
                 project.StartDate = request.StartDate;
@@ -143,11 +192,17 @@ namespace Application.Features.Admin
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Project data changed succesfully");
-                return (true, null, "Project data changed succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Project data changed succesfully",
+                    Data = null
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             DeleteProjectAsync(string title)
         {
             using (LogContext.PushProperty("Operation", nameof(DeleteProjectAsync)))
@@ -155,8 +210,14 @@ namespace Application.Features.Admin
                 if (title == null)
                 {
                     _logger.LogError($"Could`nt find project with title:{title}");
-                    return (false, new[]
-                    { $"Could`nt find project with title:{title}" }, "Not Found");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Could`nt find project with title:{title}" },
+                        Message = "Not Found",
+                        Data = null
+                    };
+
                 }
 
                 var project = await _unitOfWork
@@ -165,26 +226,43 @@ namespace Application.Features.Admin
                 if (project == null)
                 {
                     _logger.LogError($"Could`nt find project with title:{title}");
-                    return (false, new[]
-                    { $"Could`nt find project with title:{title}" }, "Not Found");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Could`nt find project with title:{title}" },
+                        Message = "Not Found",
+                        Data = null
+                    };
                 }
 
                 _unitOfWork.ProjectRepository.Delete(project);
                 await _unitOfWork.SaveChangesAsync();
                 _logger.LogInformation($"Delete project: {title}");
-                return (true, null, $"Project titled {title} deleted succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = $"Project titled {title} deleted succesfully",
+                    Data = null
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             AddStagesToProjectAsync(AddStageRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(AddStagesToProjectAsync)))
             {
                 if (request == null)
                 {
-                    _logger.LogError("Provided invalid data");
-                    return (false, new[] { "Provide valid data" }, "Bad Request");
+                    _logger.LogError("Provided invalid data");;
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Provide valid data" },
+                        Message = "Bad Request",
+                        Data = null
+                    };
                 }
 
                 var project = await _unitOfWork
@@ -215,7 +293,13 @@ namespace Application.Features.Admin
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Stage added succesfully");
-                return (true, null, "Stage added succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Stage added succesfully",
+                    Data = null
+                };
             }
         }
     }

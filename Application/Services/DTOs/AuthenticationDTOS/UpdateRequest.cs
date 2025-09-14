@@ -1,9 +1,0 @@
-﻿namespace Application.Services.DTOs.AuthenticationDTOS
-{
-    public class UpdateRequest
-    {
-        public string? UserName { get; set; }
-        public string? Email { get; set; }
-        public string? Password { get; set; }    
-    }
-}

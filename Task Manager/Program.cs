@@ -1,7 +1,6 @@
 using Application.Features.Admin;
 using Application.Features.Authentication;
 using Application.Features.Authorization;
-using Application.Features.Reset;
 using Application.Features.User;
 using Application.Services.Interfaces;
 using Domain.Abstractions;
@@ -24,11 +23,11 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Host.UseSerilog((context, services, configuration) => configuration
-        .ReadFrom.Configuration(context.Configuration) // Read configuration from appsettings.json
-        .ReadFrom.Services(services) // Use services from the DI container
-        .Enrich.FromLogContext() // Add properties from the log context
-        .WriteTo.Console() // Write to the console
-        .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day) // Write to a file, creating a new file daily
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext() 
+        .WriteTo.Console() 
+        .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day) 
     );
     builder.Services.AddControllers();
     builder.Services.AddDbContext<ApplicationContext>(options =>
@@ -42,7 +41,6 @@ try
     builder.Services.AddScoped<AdminUserService>();
     builder.Services.AddScoped<AuthorizationService>();
     builder.Services.AddScoped<UserProjectService>();
-    builder.Services.AddScoped<ResetService>();
     builder.Services.AddAuthorization();
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -65,12 +63,12 @@ try
         });
     builder.Services.AddFluentEmail(builder.Configuration["Email:SenderEmail"],
         builder.Configuration["Email:Sender"])
-        .AddSmtpSender(builder.Configuration["Email:Host"], Convert.ToInt32(builder.Configuration["Email:Port"]));
+        .AddSmtpSender(builder.Configuration["Email:Host"], 
+        Convert.ToInt32(builder.Configuration["Email:Port"]));
     builder.Services.AddSwaggerGen(c =>
     {
         c.SwaggerDoc("v1", new OpenApiInfo { Title = "Task Manager API", Version = "v1" });
 
-        // Define the JWT Bearer scheme
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Name = "Authorization",
@@ -78,10 +76,11 @@ try
             Scheme = "bearer",
             BearerFormat = "JWT",
             In = ParameterLocation.Header,
-            Description = "Enter 'Bearer' [space] and then your token in the text input below. \r\n\r\nExample: 'Bearer 12345abcdef'",
+            Description = "Enter 'Bearer' " +
+            "[space] and then your token in the text input below. " +
+            "\r\n\r\nExample: 'Bearer 12345abcdef'",
         });
 
-        // Add security requirements to all endpoints
         c.AddSecurityRequirement(new OpenApiSecurityRequirement
         {
         {

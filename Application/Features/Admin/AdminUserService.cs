@@ -1,4 +1,5 @@
-﻿using Application.Services.DTOs.PorjectDTOs;
+﻿using Application.Services.DTOs.Generic;
+using Application.Services.DTOs.PorjectDTOs;
 using Domain.Abstractions;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
@@ -16,25 +17,37 @@ namespace Application.Features.Admin
             _logger = logger;
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors,
-            string message, List<Domain.Entities.DbEntities.User>? users)> GetAllUsersAsync()
+        public async Task<ServiceResult<List<Domain.Entities.DbEntities.User>>> GetAllUsersAsync()
         {
             using (LogContext.PushProperty("Operation", nameof(GetAllUsersAsync)))
             {
-                List<Domain.Entities.DbEntities.User> users = (List<Domain.Entities.DbEntities.User>)await _unitOfWork.UserRepository.GetAllAsync();
+                List<Domain.Entities.DbEntities.User> users = 
+                    (List<Domain.Entities.DbEntities.User>)await _unitOfWork.UserRepository.GetAllAsync();
 
                 if (users == null)
                 {
                     _logger.LogError("Couldn`t find users");
-                    return (false, new[] { "There are no availvable users" }, "Conflict", null);
+                    return new ServiceResult<List<Domain.Entities.DbEntities.User>>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "There are no availvable users" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 _logger.LogInformation("Users retrieved succesfully");
-                return (true, null, "Retrieved users", users);
+                return new ServiceResult<List<Domain.Entities.DbEntities.User>>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Users retrieved succesfully",
+                    Data = users
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             AssignOnProjectAsync(AssignRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(AssignOnProjectAsync)))
@@ -42,7 +55,13 @@ namespace Application.Features.Admin
                 if (request == null)
                 {
                     _logger.LogError("Failed to assigned user to project");
-                    return (false, new[] { "Invalid data" }, "Error");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Invalid data" },
+                        Message = "Error",
+                        Data = null
+                    };
                 }
 
                 var project = await _unitOfWork
@@ -61,11 +80,17 @@ namespace Application.Features.Admin
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("User assigned to project succesfully");
-                return (true, new[] { "User assigned to project succesfully" }, "Success");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Success",
+                    Data = null
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             AssignRoleAsync(AssignRoleRequest request)
         {
             using (LogContext.PushProperty("Operation", nameof(AssignRoleAsync)))
@@ -73,7 +98,13 @@ namespace Application.Features.Admin
                 if (request == null)
                 {
                     _logger.LogError("Failed to assign role to user");
-                    return (false, new[] { "Invalid data" }, "Error");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { "Invalid data" },
+                        Message = "Error",
+                        Data = null
+                    };
                 }
 
                 var user = await _unitOfWork
@@ -82,8 +113,13 @@ namespace Application.Features.Admin
                 if (user == null)
                 {
                     _logger.LogError($"Couldn`t find user with username:{request.UserName}");
-                    return (false, new[]
-                    { $"Couldn`t find user with username:{request.UserName}" }, "Conflict");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Couldn`t find user with username:{request.UserName}" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 user.Role = request.Role;
@@ -91,11 +127,17 @@ namespace Application.Features.Admin
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Role assigned to user succesfully");
-                return (true, null, "Role assigned to user succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "Role assigned to user succesfully",
+                    Data = null
+                };
             }
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
+        public async Task<ServiceResult<object>>
             DeleteUserAsync(string userName)
         {
             using (LogContext.PushProperty("Operation", nameof(DeleteUserAsync)))
@@ -103,7 +145,13 @@ namespace Application.Features.Admin
                 if (userName == null)
                 {
                     _logger.LogError($"Couldn`t find user with username:{userName}");
-                    return (false, new[] { $"Couldn`t find user with username:{userName}" }, "Not Found");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"Couldn`t find user with username:{userName}" },
+                        Message = "Not Found",
+                        Data = null
+                    };
                 }
 
                 var user = await _unitOfWork.
@@ -113,7 +161,13 @@ namespace Application.Features.Admin
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("User removed succesfully");
-                return (true, null, "User removed succesfully");
+                return new ServiceResult<object>
+                {
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "User removed succesfully",
+                    Data = null
+                };
             }
         }
     }

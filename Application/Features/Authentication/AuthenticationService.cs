@@ -1,4 +1,5 @@
 ﻿using Application.Services.DTOs.AuthenticationDTOS;
+using Application.Services.DTOs.Generic;
 using Application.Services.Interfaces;
 using Domain.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -11,19 +12,19 @@ namespace Application.Features.Authentication
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
         private readonly ILogger<AuthenticationService> _logger;
-
-
+        private readonly IJwtGenerator _jwtGenerator;
         public AuthenticationService(IUnitOfWork unitOfWork,
                               IPasswordHasher passwordHasher,
-                              ILogger<AuthenticationService> logger)
+                              ILogger<AuthenticationService> logger,
+                              IJwtGenerator jwtGenerator)
         {
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
             _logger = logger;
+            _jwtGenerator = jwtGenerator;
         }
 
-        public async Task<(bool isSucceded, IEnumerable<string>? errors,
-            string message)>
+        public async Task<ServiceResult<object>>
             RegisterAsync(RegisterRequest registerRequest, string confirmationLinkBaseUrl)
         {
             using (LogContext.PushProperty("Operation", nameof(RegisterAsync)))
@@ -35,14 +36,30 @@ namespace Application.Features.Authentication
 
                 if (existingUserbyEmail != null)
                 {
-                    _logger.LogError($"User with such email already exists, {existingUserbyEmail.Email}");
-                    return (false, new[] { "User with such email already exists" }, "Conflict");
+                    _logger.LogError($"User with such email already exists, " +
+                        $"{existingUserbyEmail.Email}");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"User with such email already exists, " +
+                        $"{existingUserbyEmail.Email}" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 if (existingUserByUserName != null)
                 {
-                    _logger.LogError($"User with such username already exists, {existingUserByUserName.UserName}");
-                    return (false, new[] { "User with such user name already exists" }, "Conflict");
+                    _logger.LogError($"User with such username already exists, " +
+                        $"{existingUserByUserName.UserName}");
+                    return new ServiceResult<object>
+                    {
+                        IsSucceded = false,
+                        Errors = new[] { $"User with such username already exists, " +
+                        $"{existingUserByUserName.UserName}" },
+                        Message = "Conflict",
+                        Data = null
+                    };
                 }
 
                 var user = new Domain.Entities.DbEntities.User
@@ -53,88 +70,21 @@ namespace Application.Features.Authentication
                     PasswordHash = _passwordHasher.Hash(registerRequest.Password!),
                     IsConfirmed = true
                 };
-                //var adminUser = new User
-                //{
-                //    Id= Guid.NewGuid(),
-                //    UserName = "Admin",
-                //    Email = "Admin@gmail.com",
-                //    PasswordHash = _passwordHasher.Hash("strong_admin_pass_123"),
-                //    IsConfirmed = true,
-                //    Role = Role.TeamLead
-                //};
-                //await _unitOfWork.UserRepository.AddAsync(adminUser);
-                //await _unitOfWork.SaveChangesAsync();
 
-                //var confirmationToken = _jwtGenerator.CreateJwtToken(user);
-                //user.ConfirmationToken = confirmationToken;
+                var confirmationToken = _jwtGenerator.CreateJwtToken(user);
+                user.ConfirmationToken = confirmationToken;
 
                 await _unitOfWork.UserRepository.AddAsync(user);
                 await _unitOfWork.SaveChangesAsync();
 
-                //var confirmationLink = $"{confirmationLinkBaseUrl}?userId={user.Id}&token={Uri.EscapeDataString(confirmationToken)}";
-
-                //try
-                //{
-                //    _logger.LogInformation("Attemp to send verification email");
-                //    await _emailFactory.To(user.Email)
-                //        .Subject("Email verification for Task Manager")
-                //        .Body($"To verify you email <a href='{confirmationLink}'>click here</a>", isHtml: true)
-                //        .SendAsync();
-                //}
-                //catch (Exception ex)
-                //{
-                //    _logger.LogError("Failed to send confirmation email.");
-                //    return (false, new[] { "Failed to send confirmation email." },
-                //        $"User registered, but failed to send confirmation email. {ex.Message}", null, null);
-                //}
-
                 _logger.LogInformation("User registered succesfully");
-                return (true, null, "User registered succesfully");
-            }
-        }
-
-        public async Task<(bool isSucceded, IEnumerable<string>? errors, string message)>
-            ConfirmEmailAsync(ConfirmRequest confirmRequest, string token)
-        {
-            using (LogContext.PushProperty("Operation", nameof(ConfirmEmailAsync)))
-            {
-                if (confirmRequest == null || token == null)
+                return new ServiceResult<object>
                 {
-                    _logger.LogError("Failed to confirm user credentials");
-                    return (false, new[] { "Invalid confirmation data" }, "Bad Request");
-                }
-
-                var existingUserByEmail = await _unitOfWork
-                    .UserRepository.GetByEmailAsync(confirmRequest.Email);
-
-                if (existingUserByEmail == null)
-                {
-                    _logger.LogError($"Couldn`t find user with email {existingUserByEmail.Email}");
-                    return (false, new[] { "User with such email doesn`t exists" }, "Bad request");
-                }
-                if (existingUserByEmail.ConfirmationToken != token)
-                {
-                    _logger.LogError("Token expired");
-                    return (false, new[] { "Invalid or expired reset token" }, "Unauthorized");
-                }
-
-                try
-                {
-                    _logger.LogInformation("Attemp to confirm user credentials");
-                    existingUserByEmail.ConfirmationToken = null;
-                    existingUserByEmail.IsConfirmed = true;
-
-                    _unitOfWork.UserRepository.Update(existingUserByEmail);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Couldn`t verify email, {ex.Message}");
-                    return (false, new[] { $"Couldn`t verify email, {ex.Message}" }, "Error");
-                }
-
-                _logger.LogInformation("Email confirmed succesfully");
-                return (true, null, "Email confirmed succesfully");
+                    IsSucceded = true,
+                    Errors = null,
+                    Message = "User registered succesfully",
+                    Data = null
+                };
             }
         }
     }

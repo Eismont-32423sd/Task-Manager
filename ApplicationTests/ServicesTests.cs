@@ -8,7 +8,6 @@ using Application.Services.Interfaces;
 using Domain.Abstractions;
 using Domain.Entities.DbEntities;
 using Domain.Entities.Enums;
-using FluentEmail.Core;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -16,984 +15,698 @@ namespace ApplicationTests
 {
     public class ServicesTests
     {
-        #region AuthenticationService
+        private readonly Mock<IUnitOfWork> unitOfWorkMock;
+        private readonly Mock<IPasswordHasher> passwordHasherMock;
+        private readonly Mock<ILogger<AuthenticationService>> loggerMock;
+        private readonly Mock<IJwtGenerator> jwtGeneratorMock;
 
-        [Fact]
-        public async Task RegisterAsync_ReturnsConflict_WhenEmailExists()
+        public ServicesTests()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
+            unitOfWorkMock = new Mock<IUnitOfWork>();
+            passwordHasherMock = new Mock<IPasswordHasher>();
+            loggerMock = new Mock<ILogger<AuthenticationService>>();
+            jwtGeneratorMock = new Mock<IJwtGenerator>();
+        }
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync(new User { Email = "test@test.com" });
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
+        #region Authentication
+        [Fact]
+        public async Task RegisterAsync_UserExistsByEmail_ReturnsConflict()
+        {
+            unitOfWorkMock.Reset();
+            passwordHasherMock.Reset();
+            loggerMock.Reset();
+            jwtGeneratorMock.Reset();
+
+            var existingUser = new User { Email = "test@example.com" };
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByEmailAsync(It.IsAny<string>()))
+                .ReturnsAsync(existingUser);
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync(It.IsAny<string>()))
                 .ReturnsAsync((User)null);
 
-            var service = new AuthenticationService(unitOfWorkMock.Object, 
-                passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
+            var service = new AuthenticationService(
+                unitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                loggerMock.Object,
+                jwtGeneratorMock.Object);
 
-            var request = new RegisterRequest { Email = "test@test.com", UserName = "user", Password = "pass" };
-            var result = await service.RegisterAsync(request, "http://confirm");
+            var request = new RegisterRequest
+            {
+                Email = "test@example.com",
+                UserName = "newuser",
+                Password = "password"
+            };
 
-            Assert.False(result.isSucceded);
-            // Replace this line:
-            // emailFactoryMock.Setup(e => e.SendAsync()).ThrowsAsync(new Exception("SMTP error"));
+            var result = await service.RegisterAsync(request, "http://localhost");
 
-            // With this:
-            emailFactoryMock.Setup(e => e.SendAsync(It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new Exception("SMTP error"));
-            Assert.Contains("User with such email already exists", result.errors);
-            Assert.Equal("Conflict", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Contains(result.Errors, e => e.Contains("User with such email already exists"));
+            Assert.Equal("Conflict", result.Message);
         }
 
         [Fact]
-        public async Task RegisterAsync_ReturnsConflict_WhenUserNameExists()
+        public async Task RegisterAsync_UserExistsByUserName_ReturnsConflict()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
+            unitOfWorkMock.Reset();
+            passwordHasherMock.Reset();
+            loggerMock.Reset();
+            jwtGeneratorMock.Reset();
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByEmailAsync(It.IsAny<string>()))
                 .ReturnsAsync((User)null);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(new User { UserName = "user" });
+            var existingUser = new User { UserName = "existinguser" };
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync(It.IsAny<string>()))
+                .ReturnsAsync(existingUser);
 
-            var service = new AuthenticationService(unitOfWorkMock.Object, 
-                passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
+            var service = new AuthenticationService(
+                unitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                loggerMock.Object,
+                jwtGeneratorMock.Object);
 
-            var request = new RegisterRequest { Email = "new@test.com", UserName = "user", Password = "pass" };
-            var result = await service.RegisterAsync(request, "http://confirm");
+            var request = new RegisterRequest
+            {
+                Email = "new@example.com",
+                UserName = "existinguser",
+                Password = "password"
+            };
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("User with such user name already exists", result.errors);
-            Assert.Equal("Conflict", result.message);
+            var result = await service.RegisterAsync(request, "http://localhost");
+
+            Assert.False(result.IsSucceded);
+            Assert.Contains(result.Errors, e => e.Contains("User with such username already exists"));
+            Assert.Equal("Conflict", result.Message);
         }
 
         [Fact]
-        public async Task RegisterAsync_ReturnsError_WhenEmailSendFails()
+        public async Task RegisterAsync_NewUser_SuccessfulRegistration()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
+            unitOfWorkMock.Reset();
+            passwordHasherMock.Reset();
+            loggerMock.Reset();
+            jwtGeneratorMock.Reset();
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByEmailAsync(It.IsAny<string>()))
                 .ReturnsAsync((User)null);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync(It.IsAny<string>()))
                 .ReturnsAsync((User)null);
-            passwordHasherMock.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed");
-            jwtGenMock.Setup(j => j.CreateJwtToken(It.IsAny<User>())).Returns("token");
-            userRepoMock.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            unitOfWorkMock.Setup(u => u.UserRepository.AddAsync(It.IsAny<User>()))
+                .Returns(Task.CompletedTask);
+            unitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
-            emailFactoryMock.Setup(e => e.To(It.IsAny<string>())).Returns(emailFactoryMock.Object);
-            emailFactoryMock.Setup(e => e.Subject(It.IsAny<string>())).Returns(emailFactoryMock.Object);
-            emailFactoryMock.Setup(e => e.Body(It.IsAny<string>(), true)).Returns(emailFactoryMock.Object);
-            emailFactoryMock.Setup(e => e.SendAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("SMTP error"));
+            passwordHasherMock.Setup(p => p.Hash(It.IsAny<string>()))
+                .Returns("hashedpassword");
+            jwtGeneratorMock.Setup(j => j.CreateJwtToken(It.IsAny<User>()))
+                .Returns("token");
 
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, 
-                jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
+            var service = new AuthenticationService(
+                unitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                loggerMock.Object,
+                jwtGeneratorMock.Object);
 
-            var request = new RegisterRequest { Email = "new@test.com", UserName = "user", Password = "pass" };
-            var result = await service.RegisterAsync(request, "http://confirm");
+            var request = new RegisterRequest
+            {
+                Email = "new@example.com",
+                UserName = "newuser",
+                Password = "password"
+            };
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Failed to send confirmation email.", result.errors);
-            Assert.Contains("User registered, but failed to send confirmation email.", result.message);
+            var result = await service.RegisterAsync(request, "http://localhost");
+
+            Assert.True(result.IsSucceded);
+            Assert.Null(result.Errors);
+            Assert.Equal("User registered succesfully", result.Message);
         }
-
-        [Fact]
-        public async Task RegisterAsync_ReturnsSuccess_WhenRegistrationIsValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync((User)null);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync((User)null);
-            passwordHasherMock.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed");
-            jwtGenMock.Setup(j => j.CreateJwtToken(It.IsAny<User>())).Returns("token");
-            userRepoMock.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
-
-            emailFactoryMock.Setup(e => e.To(It.IsAny<string>())).Returns(emailFactoryMock.Object);
-            emailFactoryMock.Setup(e => e.Subject(It.IsAny<string>())).Returns(emailFactoryMock.Object);
-            emailFactoryMock.Setup(e => e.Body(It.IsAny<string>(), true)).Returns(emailFactoryMock.Object);
-            // Replace this line:
-            // emailFactoryMock.Setup(static e => e.SendAsync()).ReturnsAsync(new FluentEmail.Core.Models.SendResponse { Success = true });
-
-            // With this:
-           
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var request = new RegisterRequest { Email = "new@test.com", UserName = "user", Password = "pass" };
-            var result = await service.RegisterAsync(request, "http://confirm");
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("User registered succesfully", result.message);
-            Assert.NotNull(result.ConfiramationToken);
-            Assert.NotNull(result.UserId);
-        }
-
-        [Fact]
-        public async Task ConfirmEmailAsync_ReturnsBadRequest_WhenRequestOrTokenIsNull()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var result = await service.ConfirmEmailAsync(null, null);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Invalid confirmation data", result.errors);
-            Assert.Equal("Bad Request", result.message);
-        }
-
-        [Fact]
-        public async Task ConfirmEmailAsync_ReturnsBadRequest_WhenUserNotFound()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync((User)null);
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var confirmRequest = new ConfirmRequest { Email = "notfound@test.com" };
-            var result = await service.ConfirmEmailAsync(confirmRequest, "token");
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("User with such email doesn`t exists", result.errors);
-            Assert.Equal("Bad request", result.message);
-        }
-
-        [Fact]
-        public async Task ConfirmEmailAsync_ReturnsUnauthorized_WhenTokenIsInvalid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync(new User { Email = "test@test.com", ConfirmationToken = "validtoken" });
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var confirmRequest = new ConfirmRequest { Email = "test@test.com" };
-            var result = await service.ConfirmEmailAsync(confirmRequest, "invalidtoken");
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Invalid or expired reset token", result.errors);
-            Assert.Equal("Unauthorized", result.message);
-        }
-
-        [Fact]
-        public async Task ConfirmEmailAsync_ReturnsError_WhenExceptionThrown()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            var user = new User { Email = "test@test.com", ConfirmationToken = "token" };
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync(user);
-            userRepoMock.Setup(r => r.Update(It.IsAny<User>())).Throws(new Exception("DB error"));
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var confirmRequest = new ConfirmRequest { Email = "test@test.com" };
-            var result = await service.ConfirmEmailAsync(confirmRequest, "token");
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Couldn`t verify email, DB error", result.errors.First());
-            Assert.Equal("Error", result.message);
-        }
-
-        [Fact]
-        public async Task ConfirmEmailAsync_ReturnsSuccess_WhenConfirmationIsValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var emailFactoryMock = new Mock<IFluentEmail>();
-            var loggerMock = new Mock<ILogger<AuthenticationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            var user = new User { Email = "test@test.com", ConfirmationToken = "token" };
-            userRepoMock.Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
-                .ReturnsAsync(user);
-            userRepoMock.Setup(r => r.Update(It.IsAny<User>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
-
-            var service = new AuthenticationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, emailFactoryMock.Object, loggerMock.Object);
-
-            var confirmRequest = new ConfirmRequest { Email = "test@test.com" };
-            var result = await service.ConfirmEmailAsync(confirmRequest, "token");
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Email confirmed succesfully", result.message);
-        }
-
-        #endregion
-        #region AuthorizationService
-
-        [Fact]
-        public async Task LoginAsync_ReturnsConflict_WhenUserNotFound()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var loggerMock = new Mock<ILogger<AuthorizationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync((User)null);
-
-            var service = new AuthorizationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, loggerMock.Object);
-
-            var loginRequest = new LoginRequest { UserName = "notfound", Password = "pass" };
-            var result = await service.LoginAsync(loginRequest);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("User with such username doesn`t exist", result.errors);
-            Assert.Equal("Conflict", result.message);
-            Assert.Null(result.token);
-        }
-
-        [Fact]
-        public async Task LoginAsync_ReturnsConflict_WhenPasswordDoesNotMatch()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var loggerMock = new Mock<ILogger<AuthorizationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            var user = new User { UserName = "user", PasswordHash = "hashed", IsConfirmed = true };
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(user);
-            passwordHasherMock.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
-
-            var service = new AuthorizationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, loggerMock.Object);
-
-            var loginRequest = new LoginRequest { UserName = "user", Password = "wrongpass" };
-            var result = await service.LoginAsync(loginRequest);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Password doesn`t match", result.errors);
-            Assert.Equal("Conflict", result.message);
-            Assert.Null(result.token);
-        }
-
-        [Fact]
-        public async Task LoginAsync_ReturnsConflict_WhenUserNotConfirmed()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var loggerMock = new Mock<ILogger<AuthorizationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            var user = new User { UserName = "user", PasswordHash = "hashed", IsConfirmed = false };
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(user);
-            passwordHasherMock.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
-
-            var service = new AuthorizationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, loggerMock.Object);
-
-            var loginRequest = new LoginRequest { UserName = "user", Password = "pass" };
-            var result = await service.LoginAsync(loginRequest);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("You did`nt confirm your data, please check your email box", result.errors);
-            Assert.Equal("Conflict", result.message);
-            Assert.Null(result.token);
-        }
-
-        [Fact]
-        public async Task LoginAsync_ReturnsSuccess_WhenCredentialsAreValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var passwordHasherMock = new Mock<IPasswordHasher>();
-            var jwtGenMock = new Mock<IJwtGenerator>();
-            var loggerMock = new Mock<ILogger<AuthorizationService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            var user = new User { UserName = "user", PasswordHash = "hashed", IsConfirmed = true };
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(user);
-            passwordHasherMock.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
-            jwtGenMock.Setup(j => j.CreateJwtToken(It.IsAny<User>())).Returns("token");
-
-            var service = new AuthorizationService(unitOfWorkMock.Object, passwordHasherMock.Object, jwtGenMock.Object, loggerMock.Object);
-
-            var loginRequest = new LoginRequest { UserName = "user", Password = "pass" };
-            var result = await service.LoginAsync(loginRequest);
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Logged in succesfully", result.message);
-            Assert.Equal("token", result.token);
-        }
-
         #endregion
         #region AdminProjectService
 
         [Fact]
-        public async Task GetAllProjectsAsync_ReturnsConflict_WhenNoProjects()
+        public async Task GetAllProjectsAsync_NoProjects_ReturnsConflict()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.GetAllWithParticipantsAsync())
+                .ReturnsAsync((IEnumerable<Project>)null);
 
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetAllWithParticipantsAsync()).ReturnsAsync(new List<Project>());
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.GetAllProjectsAsync();
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("There are no available projects", result.errors);
-            Assert.Equal("Conflict", result.message);
-            Assert.Null(result.projects);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("There are no available projects"));
         }
 
         [Fact]
-        public async Task GetAllProjectsAsync_ReturnsSuccess_WhenProjectsExist()
+        public async Task GetAllProjectsAsync_ProjectsExist_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var projects = new List<Project>
+            {
+                new Project { Id = Guid.NewGuid(), Title = "Test", Description = "Desc", Participants = new List<User> { new User { Id = Guid.NewGuid(), UserName = "user1" } } }
+            };
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.GetAllWithParticipantsAsync())
+                .ReturnsAsync(projects);
 
-            var user = new User { Id = Guid.NewGuid(), UserName = "user" };
-            var project = new Project { Id = Guid.NewGuid(), Title = "Project", Participants = new List<User> { user } };
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetAllWithParticipantsAsync()).ReturnsAsync(new List<Project> { project });
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.GetAllProjectsAsync();
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Retrieved projects", result.message);
-            Assert.Single(result.projects);
-            Assert.Equal("Project", result.projects[0].Title);
-            Assert.Single(result.projects[0].Participants);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Retrieved projects", result.Message);
+            Assert.NotNull(result.Data);
+            Assert.Single(result.Data);
         }
 
         [Fact]
-        public async Task CreateProjectAsync_ReturnsError_WhenRequestIsNull()
+        public async Task CreateProjectAsync_NullRequest_ReturnsError()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.CreateProjectAsync(null);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Error occured while creating new project", result.errors);
-            Assert.Equal("Error", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Error occured while creating new project"));
         }
 
         [Fact]
-        public async Task CreateProjectAsync_ReturnsSuccess_WhenValid()
+        public async Task CreateProjectAsync_ValidRequest_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var request = new CreateProjectRequest
+            {
+                Title = "New Project",
+                Description = "Desc",
+                StartDate = DateOnly.FromDateTime(DateTime.Now),
+                EndDate = DateOnly.FromDateTime(DateTime.Now.AddDays(1)),
+                ProjectType = Domain.Entities.Enums.ProjectType.PetProject,
+                Status = Domain.Entities.Enums.ProjectStatus.Development
+            };
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.AddAsync(It.IsAny<Project>()))
+                .Returns(Task.CompletedTask);
+            adminUnitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.AddAsync(It.IsAny<Project>())).Returns(Task.CompletedTask);
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var request = new CreateProjectRequest { Title = "New Project" };
             var result = await service.CreateProjectAsync(request);
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Project added succesfully", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Project added succesfully", result.Message);
         }
 
         [Fact]
-        public async Task GetProjectByIdAsync_ReturnsError_WhenIdIsEmpty()
+        public async Task GetProjectByIdAsync_EmptyId_ReturnsError()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.GetProjectByIdAsync(Guid.Empty);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Provide valid project id", result.errors);
-            Assert.Equal("Error", result.message);
-            Assert.Null(result.project);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Provide valid project id", result.Message);
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task GetProjectByIdAsync_ReturnsError_WhenProjectNotFound()
+        public async Task GetProjectByIdAsync_NotFound_ReturnsError()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var id = Guid.NewGuid();
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.GetByIdAsync(id))
+                .ReturnsAsync((Project)null);
 
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Project)null);
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var result = await service.GetProjectByIdAsync(id);
 
-            var result = await service.GetProjectByIdAsync(Guid.NewGuid());
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Unable to find project with id =", result.errors.First());
-            Assert.Equal("Error", result.message);
-            Assert.Null(result.project);
+            Assert.False(result.IsSucceded);
+            Assert.Equal($"Unable to find project with id = {id}", result.Message);
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task GetProjectByIdAsync_ReturnsSuccess_WhenProjectFound()
+        public async Task GetProjectByIdAsync_Found_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-            var project = new Project { Id = Guid.NewGuid(), Title = "Project" };
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminProjectService>>();
+            var id = Guid.NewGuid();
+            var project = new Project { Id = id, Title = "Test" };
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.GetByIdAsync(id))
+                .ReturnsAsync(project);
 
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(project);
+            var service = new AdminProjectService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
+            var result = await service.GetProjectByIdAsync(id);
 
-            var result = await service.GetProjectByIdAsync(project.Id);
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Project retrieved succesfully", result.message);
-            Assert.Equal(project, result.project);
-        }
-
-        [Fact]
-        public async Task UpdateProjectAsync_ReturnsNotFound_WhenTitleIsNull()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.UpdateProjectAsync(null, new UpdateProjectRequest());
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Please provide project title", result.errors);
-            Assert.Equal("Not Found", result.message);
-        }
-
-        [Fact]
-        public async Task UpdateProjectAsync_ReturnsConflict_WhenRequestIsNull()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.UpdateProjectAsync("title", null);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Invalid update data", result.errors);
-            Assert.Equal("Conflict", result.message);
-        }
-
-        [Fact]
-        public async Task UpdateProjectAsync_ReturnsNotFound_WhenProjectNotFound()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByTitleAsync(It.IsAny<string>())).ReturnsAsync((Project)null);
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.UpdateProjectAsync("title", new UpdateProjectRequest());
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Couldn`t find porject with title title", result.errors);
-            Assert.Equal("Not Found", result.message);
-        }
-
-        [Fact]
-        public async Task UpdateProjectAsync_ReturnsSuccess_WhenValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-            var project = new Project { Id = Guid.NewGuid(), Title = "title" };
-
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByTitleAsync(It.IsAny<string>())).ReturnsAsync(project);
-            projectRepoMock.Setup(r => r.Update(It.IsAny<Project>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var request = new UpdateProjectRequest { Title = "newtitle" };
-            var result = await service.UpdateProjectAsync("title", request);
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Project data changed succesfully", result.message);
-        }
-
-        [Fact]
-        public async Task DeleteProjectAsync_ReturnsNotFound_WhenTitleIsNull()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.DeleteProjectAsync(null);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Could`nt find project with title:", result.errors.First());
-            Assert.Equal("Not Found", result.message);
-        }
-
-        [Fact]
-        public async Task DeleteProjectAsync_ReturnsNotFound_WhenProjectNotFound()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByTitleAsync(It.IsAny<string>())).ReturnsAsync((Project)null);
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.DeleteProjectAsync("title");
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Could`nt find project with title:title", result.errors.First());
-            Assert.Equal("Not Found", result.message);
-        }
-
-        [Fact]
-        public async Task DeleteProjectAsync_ReturnsSuccess_WhenValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-            var project = new Project { Id = Guid.NewGuid(), Title = "title" };
-
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByTitleAsync(It.IsAny<string>())).ReturnsAsync(project);
-            projectRepoMock.Setup(r => r.Delete(It.IsAny<Project>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.DeleteProjectAsync("title");
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Project titled title deleted succesfully", result.message);
-        }
-
-        [Fact]
-        public async Task AddStagesToProjectAsync_ReturnsBadRequest_WhenRequestIsNull()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var result = await service.AddStagesToProjectAsync(null);
-
-            Assert.False(result.isSucceded);
-            Assert.Contains("Provide valid data", result.errors);
-            Assert.Equal("Bad Request", result.message);
-        }
-
-        [Fact]
-        public async Task AddStagesToProjectAsync_ReturnsSuccess_WhenValid()
-        {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminProjectService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-            var stageRepoMock = new Mock<IStageRepository>();
-            var stageAssignmentRepoMock = new Mock<IStageAssignmentRepository>();
-            var userRepoMock = new Mock<IUserRepository>();
-
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.StageRepository).Returns(stageRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.StageAssignmentRepository).Returns(stageAssignmentRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-
-            projectRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(new Project { Id = Guid.NewGuid() });
-            stageRepoMock.Setup(r => r.AddAsync(It.IsAny<Stage>())).Returns(Task.CompletedTask);
-            stageAssignmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<StageAssignment>>())).Returns(Task.CompletedTask);
-            userRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(new User());
-
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
-
-            var service = new AdminProjectService(unitOfWorkMock.Object, loggerMock.Object);
-
-            var request = new AddStageRequest
-            {
-                ProjectId = Guid.NewGuid(),
-                Title = "Stage",
-                AssignedUserIds = new List<Guid> { Guid.NewGuid() }
-            };
-            var result = await service.AddStagesToProjectAsync(request);
-
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Stage added succesfully", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Project retrieved succesfully", result.Message);
+            Assert.Equal(project, result.Data);
         }
 
         #endregion
         #region AdminUserService
 
         [Fact]
-        public async Task GetAllUsersAsync_ReturnsConflict_WhenNoUsers()
+        public async Task GetAllUsersAsync_NoUsers_ReturnsConflict()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var userRepoMock = new Mock<IUserRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetAllAsync())
+                .ReturnsAsync((IEnumerable<User>)null);
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync((List<User>)null);
-
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.GetAllUsersAsync();
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("There are no availvable users", result.errors);
-            Assert.Equal("Conflict", result.message);
-            Assert.Null(result.users);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("There are no availvable users"));
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task GetAllUsersAsync_ReturnsSuccess_WhenUsersExist()
+        public async Task GetAllUsersAsync_UsersExist_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var users = new List<User> { new User { Id = Guid.NewGuid(), UserName = "user" } };
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var users = new List<User>
+            {
+                new User { Id = Guid.NewGuid(), UserName = "user1", Email = "user1@example.com" }
+            };
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetAllAsync())
+                .ReturnsAsync(users);
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(users);
-
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.GetAllUsersAsync();
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Retrieved users", result.message);
-            Assert.Single(result.users);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Users retrieved succesfully", result.Message);
+            Assert.NotNull(result.Data);
+            Assert.Single(result.Data);
         }
 
         [Fact]
-        public async Task AssignOnProjectAsync_ReturnsError_WhenRequestIsNull()
+        public async Task AssignOnProjectAsync_NullRequest_ReturnsError()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.AssignOnProjectAsync(null);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Invalid data", result.errors);
-            Assert.Equal("Error", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Invalid data"));
         }
 
         [Fact]
-        public async Task AssignOnProjectAsync_ReturnsSuccess_WhenValid()
+        public async Task AssignOnProjectAsync_ValidRequest_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var projectRepoMock = new Mock<IProjectRepository>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var project = new Project { Id = Guid.NewGuid(), Title = "Project", Participants = new List<User>() };
-            var user = new User { Id = Guid.NewGuid(), UserName = "user" };
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var project = new Project { Id = Guid.NewGuid(), Title = "Test", Participants = new List<User>() };
+            var user = new User { Id = Guid.NewGuid(), UserName = "user1" };
+            var request = new AssignRequest { Titile = "Test", UserNames = new List<string> { "user1" } };
 
-            unitOfWorkMock.Setup(u => u.ProjectRepository).Returns(projectRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            projectRepoMock.Setup(r => r.GetByTitleAsync(It.IsAny<string>())).ReturnsAsync(project);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>())).ReturnsAsync(user);
-            projectRepoMock.Setup(r => r.Update(It.IsAny<Project>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.GetByTitleAsync("Test"))
+                .ReturnsAsync(project);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            adminUnitOfWorkMock.Setup(u => u.ProjectRepository.Update(project));
+            adminUnitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var request = new AssignRequest { Titile = "Project", UserNames = new List<string> { "user" } };
             var result = await service.AssignOnProjectAsync(request);
 
-            Assert.True(result.isSucceded);
-            Assert.Contains("User assigned to project succesfully", result.errors);
-            Assert.Equal("Success", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Success", result.Message);
         }
 
         [Fact]
-        public async Task AssignRoleAsync_ReturnsError_WhenRequestIsNull()
+        public async Task AssignRoleAsync_NullRequest_ReturnsError()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.AssignRoleAsync(null);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Invalid data", result.errors);
-            Assert.Equal("Error", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Invalid data"));
         }
 
         [Fact]
-        public async Task AssignRoleAsync_ReturnsConflict_WhenUserNotFound()
+        public async Task AssignRoleAsync_UserNotFound_ReturnsConflict()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var userRepoMock = new Mock<IUserRepository>();
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var request = new AssignRoleRequest { UserName = "user1", Role = Role.Tester };
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>())).ReturnsAsync((User)null);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync((User)null);
 
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var request = new AssignRoleRequest { UserName = "user", Role = Role.TeamLead };
             var result = await service.AssignRoleAsync(request);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Couldn`t find user with username:user", result.errors);
-            Assert.Equal("Conflict", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Couldn`t find user with username:user1"));
         }
 
         [Fact]
-        public async Task AssignRoleAsync_ReturnsSuccess_WhenValid()
+        public async Task AssignRoleAsync_ValidRequest_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var user = new User { Id = Guid.NewGuid(), UserName = "user" };
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var user = new User { Id = Guid.NewGuid(), UserName = "user1" };
+            var request = new AssignRoleRequest { UserName = "user1", Role = Role.TeamLead };
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>())).ReturnsAsync(user);
-            userRepoMock.Setup(r => r.Update(It.IsAny<User>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.Update(user));
+            adminUnitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var request = new AssignRoleRequest { UserName = "user", Role = Role.TeamLead };
             var result = await service.AssignRoleAsync(request);
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Role assigned to user succesfully", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Role assigned to user succesfully", result.Message);
         }
 
         [Fact]
-        public async Task DeleteUserAsync_ReturnsNotFound_WhenUserNameIsNull()
+        public async Task DeleteUserAsync_NullUserName_ReturnsNotFound()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
             var result = await service.DeleteUserAsync(null);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Couldn`t find user with username:", result.errors.First());
-            Assert.Equal("Not Found", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Not Found", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Couldn`t find user with username:"));
         }
 
         [Fact]
-        public async Task DeleteUserAsync_ReturnsSuccess_WhenValid()
+        public async Task DeleteUserAsync_ValidUserName_ReturnsSuccess()
         {
-            var unitOfWorkMock = new Mock<IUnitOfWork>();
-            var loggerMock = new Mock<ILogger<AdminUserService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var user = new User { Id = Guid.NewGuid(), UserName = "user" };
+            var adminUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var adminLoggerMock = new Mock<ILogger<AdminUserService>>();
+            var user = new User { Id = Guid.NewGuid(), UserName = "user1" };
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>())).ReturnsAsync(user);
-            userRepoMock.Setup(r => r.Delete(It.IsAny<User>()));
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            adminUnitOfWorkMock.Setup(u => u.UserRepository.Delete(user));
+            adminUnitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
-            var service = new AdminUserService(unitOfWorkMock.Object, loggerMock.Object);
+            var service = new AdminUserService(adminUnitOfWorkMock.Object, adminLoggerMock.Object);
 
-            var result = await service.DeleteUserAsync("user");
+            var result = await service.DeleteUserAsync("user1");
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("User removed succesfully", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("User removed succesfully", result.Message);
+        }
+
+        #endregion
+        #region AuthorizationService
+
+        [Fact]
+        public async Task LoginAsync_UserNotFound_ReturnsConflict()
+        {
+            var authUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var passwordHasherMock = new Mock<IPasswordHasher>();
+            var jwtGeneratorMock = new Mock<IJwtGenerator>();
+            var loggerMock = new Mock<ILogger<AuthorizationService>>();
+
+            authUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync(It.IsAny<string>()))
+                .ReturnsAsync((User)null);
+
+            var service = new AuthorizationService(
+                authUnitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                jwtGeneratorMock.Object,
+                loggerMock.Object);
+
+            var request = new LoginRequest
+            {
+                UserName = "notfound",
+                Password = "password"
+            };
+
+            var result = await service.LoginAsync(request);
+
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("User with such username doesn`t exist"));
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async Task LoginAsync_PasswordDoesNotMatch_ReturnsConflict()
+        {
+            var authUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var passwordHasherMock = new Mock<IPasswordHasher>();
+            var jwtGeneratorMock = new Mock<IJwtGenerator>();
+            var loggerMock = new Mock<ILogger<AuthorizationService>>();
+
+            var user = new User { UserName = "user1", PasswordHash = "hashed" };
+            authUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            passwordHasherMock.Setup(p => p.Verify("wrongpassword", "hashed"))
+                .Returns(false);
+
+            var service = new AuthorizationService(
+                authUnitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                jwtGeneratorMock.Object,
+                loggerMock.Object);
+
+            var request = new LoginRequest
+            {
+                UserName = "user1",
+                Password = "wrongpassword"
+            };
+
+            var result = await service.LoginAsync(request);
+
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Password doesn`t match"));
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async Task LoginAsync_UserNotConfirmed_ReturnsConflict()
+        {
+            var authUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var passwordHasherMock = new Mock<IPasswordHasher>();
+            var jwtGeneratorMock = new Mock<IJwtGenerator>();
+            var loggerMock = new Mock<ILogger<AuthorizationService>>();
+
+            var user = new User { UserName = "user1", PasswordHash = "hashed", IsConfirmed = false };
+            authUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            passwordHasherMock.Setup(p => p.Verify("password", "hashed"))
+                .Returns(true);
+
+            var service = new AuthorizationService(
+                authUnitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                jwtGeneratorMock.Object,
+                loggerMock.Object);
+
+            var request = new LoginRequest
+            {
+                UserName = "user1",
+                Password = "password"
+            };
+
+            var result = await service.LoginAsync(request);
+
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Conflict", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Some error ocured"));
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async Task LoginAsync_Success_ReturnsToken()
+        {
+            var authUnitOfWorkMock = new Mock<IUnitOfWork>();
+            var passwordHasherMock = new Mock<IPasswordHasher>();
+            var jwtGeneratorMock = new Mock<IJwtGenerator>();
+            var loggerMock = new Mock<ILogger<AuthorizationService>>();
+
+            var user = new User { UserName = "user1", PasswordHash = "hashed", IsConfirmed = true };
+            authUnitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            passwordHasherMock.Setup(p => p.Verify("password", "hashed"))
+                .Returns(true);
+            jwtGeneratorMock.Setup(j => j.CreateJwtToken(user))
+                .Returns("token");
+
+            authUnitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
+
+            var service = new AuthorizationService(
+                authUnitOfWorkMock.Object,
+                passwordHasherMock.Object,
+                jwtGeneratorMock.Object,
+                loggerMock.Object);
+
+            var request = new LoginRequest
+            {
+                UserName = "user1",
+                Password = "password"
+            };
+
+            var result = await service.LoginAsync(request);
+
+            Assert.True(result.IsSucceded);
+            Assert.Equal("User logged in succesfully", result.Message);
+            Assert.Equal("token", result.Data);
+            Assert.Null(result.Errors);
         }
 
         #endregion
         #region UserProjectService
 
         [Fact]
-        public async Task AddCommitAsync_ReturnsError_WhenRequestIsNull()
+        public async Task AddCommitAsync_NullRequest_ReturnsError()
         {
             var unitOfWorkMock = new Mock<IUnitOfWork>();
             var loggerMock = new Mock<ILogger<UserProjectService>>();
-
             var service = new UserProjectService(unitOfWorkMock.Object, loggerMock.Object);
 
             var result = await service.AddCommitAsync(null);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Please provide valid data", result.errors);
-            Assert.Equal("Error", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Please provide valid data"));
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task AddCommitAsync_ReturnsError_WhenStageAssignmentIsNull()
+        public async Task AddCommitAsync_StageAssignmentNotFound_ReturnsError()
         {
             var unitOfWorkMock = new Mock<IUnitOfWork>();
             var loggerMock = new Mock<ILogger<UserProjectService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var stageAssignmentRepoMock = new Mock<IStageAssignmentRepository>();
+            var user = new User { UserName = "user1" };
+            var request = new CommitRequest
+            {
+                UserName = "user1",
+                StageTitle = "Stage1",
+                CommitMessage = "Initial commit"
+            };
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.StageAssignmentRepository).Returns(stageAssignmentRepoMock.Object);
-
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(new User { UserName = "user" });
-            stageAssignmentRepoMock.Setup(r => r.GetByStageTitleAsync(It.IsAny<string>()))
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            unitOfWorkMock.Setup(u => u.StageAssignmentRepository.GetByStageTitleAsync("Stage1"))
                 .ReturnsAsync((StageAssignment)null);
 
             var service = new UserProjectService(unitOfWorkMock.Object, loggerMock.Object);
 
-            var request = new CommitRequest { UserName = "user", StageTitle = "stage", CommitMessage = "msg" };
             var result = await service.AddCommitAsync(request);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("User is not assigned to this stage.", result.errors);
-            Assert.Equal("Error", result.message);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("Error, user user1 is not assigned to the stage"));
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task AddCommitAsync_ReturnsSuccess_WhenValid()
+        public async Task AddCommitAsync_ValidRequest_ReturnsSuccess()
         {
             var unitOfWorkMock = new Mock<IUnitOfWork>();
             var loggerMock = new Mock<ILogger<UserProjectService>>();
-            var userRepoMock = new Mock<IUserRepository>();
-            var stageAssignmentRepoMock = new Mock<IStageAssignmentRepository>();
-            var commitRepoMock = new Mock<ICommitRepository>();
+            var user = new User { UserName = "user1" };
+            var stageAssignment = new StageAssignment { StageId = Guid.NewGuid(), UserId = Guid.NewGuid(), StageTitle = "Stage1" };
+            var request = new CommitRequest
+            {
+                UserName = "user1",
+                StageTitle = "Stage1",
+                CommitMessage = "Initial commit"
+            };
 
-            unitOfWorkMock.Setup(u => u.UserRepository).Returns(userRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.StageAssignmentRepository).Returns(stageAssignmentRepoMock.Object);
-            unitOfWorkMock.Setup(u => u.CommitRepository).Returns(commitRepoMock.Object);
-
-            userRepoMock.Setup(r => r.GetByUserNameAsync(It.IsAny<string>()))
-                .ReturnsAsync(new User { UserName = "user" });
-            stageAssignmentRepoMock.Setup(r => r.GetByStageTitleAsync(It.IsAny<string>()))
-                .ReturnsAsync(new StageAssignment { StageId = Guid.NewGuid(), UserId = Guid.NewGuid(), StageTitle = "stage" });
-            commitRepoMock.Setup(r => r.AddAsync(It.IsAny<Commit>())).Returns(Task.CompletedTask);
-            unitOfWorkMock.Setup(u => u.SaveChangesAsync()).Returns(Task.CompletedTask);
+            unitOfWorkMock.Setup(u => u.UserRepository.GetByUserNameAsync("user1"))
+                .ReturnsAsync(user);
+            unitOfWorkMock.Setup(u => u.StageAssignmentRepository.GetByStageTitleAsync("Stage1"))
+                .ReturnsAsync(stageAssignment);
+            unitOfWorkMock.Setup(u => u.CommitRepository.AddAsync(It.IsAny<Commit>()))
+                .Returns(Task.CompletedTask);
+            unitOfWorkMock.Setup(u => u.SaveChangesAsync())
+                .Returns(Task.CompletedTask);
 
             var service = new UserProjectService(unitOfWorkMock.Object, loggerMock.Object);
 
-            var request = new CommitRequest { UserName = "user", StageTitle = "stage", CommitMessage = "msg" };
             var result = await service.AddCommitAsync(request);
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Commit added successfully.", result.message);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Commit created successfully", result.Message);
+            Assert.Null(result.Errors);
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task GetAllCommitsAsync_ReturnsError_WhenNoCommits()
+        public async Task GetAllCommitsAsync_NoCommits_ReturnsError()
         {
             var unitOfWorkMock = new Mock<IUnitOfWork>();
             var loggerMock = new Mock<ILogger<UserProjectService>>();
-            var commitRepoMock = new Mock<ICommitRepository>();
+            var userId = Guid.NewGuid();
 
-            unitOfWorkMock.Setup(u => u.CommitRepository).Returns(commitRepoMock.Object);
-            commitRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync((List<Commit>)null);
+            unitOfWorkMock.Setup(u => u.CommitRepository.GetUserCommitsAsync(userId))
+                .ReturnsAsync(new List<Commit>());
 
             var service = new UserProjectService(unitOfWorkMock.Object, loggerMock.Object);
 
-            var result = await service.GetAllCommitsAsync();
+            var result = await service.GetAllCommitsAsync(userId);
 
-            Assert.False(result.isSucceded);
-            Assert.Contains("Couldn`t find any commits", result.errors);
-            Assert.Equal("Errors", result.message);
-            Assert.Null(result.commits);
+            Assert.False(result.IsSucceded);
+            Assert.Equal("Error", result.Message);
+            Assert.Contains(result.Errors, e => e.Contains("No commits found for this user"));
+            Assert.Null(result.Data);
         }
 
         [Fact]
-        public async Task GetAllCommitsAsync_ReturnsSuccess_WhenCommitsExist()
+        public async Task GetAllCommitsAsync_CommitsExist_ReturnsSuccess()
         {
             var unitOfWorkMock = new Mock<IUnitOfWork>();
             var loggerMock = new Mock<ILogger<UserProjectService>>();
-            var commitRepoMock = new Mock<ICommitRepository>();
-            var commits = new List<Commit> { new Commit { Message = "msg" } };
+            var userId = Guid.NewGuid();
+            var commits = new List<Commit>
+            {
+                new Commit { Message = "Commit1", CommitDate = DateOnly.FromDateTime(DateTime.UtcNow) }
+            };
 
-            unitOfWorkMock.Setup(u => u.CommitRepository).Returns(commitRepoMock.Object);
-            commitRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(commits);
+            unitOfWorkMock.Setup(u => u.CommitRepository.GetUserCommitsAsync(userId))
+                .ReturnsAsync(commits);
 
             var service = new UserProjectService(unitOfWorkMock.Object, loggerMock.Object);
 
-            var result = await service.GetAllCommitsAsync();
+            var result = await service.GetAllCommitsAsync(userId);
 
-            Assert.True(result.isSucceded);
-            Assert.Null(result.errors);
-            Assert.Equal("Commits retrieved succesfully", result.message);
-            Assert.Single(result.commits);
+            Assert.True(result.IsSucceded);
+            Assert.Equal("Commits retrieved successfully", result.Message);
+            Assert.NotNull(result.Data);
+            Assert.Single(result.Data);
+            Assert.Null(result.Errors);
         }
 
         #endregion
