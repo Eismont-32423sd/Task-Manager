@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Task_Manager.Controllers
 {
-    [ApiController]
+    [Route("authentication")]
     public class AuthenticationController : BaseController
     {
         private readonly AuthenticationService _authenticationService;

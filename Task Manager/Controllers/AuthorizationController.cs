@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Task_Manager.Controllers
 {
+    [Route("authorizatrion")]
     public class AuthorizationController : BaseController
     {
         private readonly AuthorizationService _service;

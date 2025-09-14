@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Task_Manager.Controllers
 {
-    [ApiController]
+    [Route("admin/users")]
     public class AdminUserController : BaseController
     {
         private readonly AdminUserService _service;
@@ -16,21 +16,21 @@ namespace Task_Manager.Controllers
             _service = service;
         }
 
-        [HttpGet("users/get-all")]
+        [HttpGet("get-all")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> GetAllUsersAsync()
         {
             return await HandleServiceCallAsync(() =>  _service.GetAllUsersAsync());
         }
 
-        [HttpPut("users/assign-to-project")]
+        [HttpPut("assign-to-project")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> AssignAsync([FromBody] AssignRequest request)
         {
             return await HandleServiceCallAsync(() => _service.AssignOnProjectAsync(request));
         }
 
-        [HttpPut("users/assign-role")]
+        [HttpPut("assign-role")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> AssignRoleAsync
             ([FromBody] AssignRoleRequest request)
@@ -38,7 +38,7 @@ namespace Task_Manager.Controllers
             return await HandleServiceCallAsync(() => _service.AssignRoleAsync(request));
         }
 
-        [HttpDelete("users/delete/username={userName}")]
+        [HttpDelete("delete/username={userName}")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> DeleteUserAsync(string userName)
         {

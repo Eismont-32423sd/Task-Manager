@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace Task_Manager.Controllers
 {
-    [ApiController]
+    [Route("user/project")]
     public class UserProjectController : BaseController
     {
         private readonly UserProjectService _service;
@@ -16,7 +16,7 @@ namespace Task_Manager.Controllers
         }
 
         [Authorize]
-        [HttpPost("project/commit")]
+        [HttpPost("commit")]
         public async Task<IActionResult>
             CommitAsync([FromBody] CommitRequest request)
         {
@@ -24,7 +24,7 @@ namespace Task_Manager.Controllers
         }
 
         [Authorize]
-        [HttpGet("project/get-all-commits")]
+        [HttpGet("get-all-commits")]
         public async Task<IActionResult> GetAllCommitsAsync()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

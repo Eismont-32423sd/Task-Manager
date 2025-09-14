@@ -13,7 +13,7 @@ namespace Task_Manager.Controllers
             _service = service;
         }
 
-        [HttpPost("add/Admin")]
+        [HttpPost("admin/add")]
         public async Task<IActionResult> AddAdminAsync()
         {
             return await HandleServiceCallAsync(() =>  _service.AddAdminAsync());

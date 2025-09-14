@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Task_Manager.Controllers
 {
-    [ApiController]
+    [Route("admin/project")]
     public class AdminProjectController : BaseController
     {
         private readonly AdminProjectService _service;
@@ -15,21 +15,21 @@ namespace Task_Manager.Controllers
             _service = service;
         }
 
-        [HttpGet("projects/get-all")]
+        [HttpGet("get-all")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> GetAllProjectsAsync()
         {
             return await HandleServiceCallAsync(_service.GetAllProjectsAsync);
         }
 
-        [HttpPost("prject/add/new-project")]
+        [HttpPost("add/new-project")]
         [Authorize(Roles = "TeamLead, Manager")]
         public async Task<IActionResult> CreateProjectAsync(CreateProjectRequest request)
         {
             return await HandleServiceCallAsync(() => _service.CreateProjectAsync(request));
         }
 
-        [HttpGet("project/get/projectid={projectId}")]
+        [HttpGet("get/projectid={projectId}")]
         [Authorize]
         public async Task<IActionResult> GetProjectByIdAsync(Guid projectId)
         {
@@ -39,7 +39,7 @@ namespace Task_Manager.Controllers
             });
         }
 
-        [HttpPut("project/change/porjectTitle={projectTitle}")]
+        [HttpPut("update/porjectTitle={projectTitle}")]
         [Authorize(Roles = "TeamLead, Manager")]
         public async Task<IActionResult> UpdateProjectAsync
             (string projectTitle, [FromBody] UpdateProjectRequest request)
@@ -47,14 +47,14 @@ namespace Task_Manager.Controllers
             return await HandleServiceCallAsync(() => _service.UpdateProjectAsync(projectTitle, request));
         }
 
-        [HttpDelete("projects/delete/title={title}")]
+        [HttpDelete("delete/title={title}")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> DeleteProjectAsync(string title)
         {
             return await HandleServiceCallAsync(() => _service.DeleteProjectAsync(title));
         }
 
-        [HttpPost("projects/add/stages")]
+        [HttpPost("add/stages")]
         [Authorize(Roles = "TeamLead")]
         public async Task<IActionResult> AddStagesAsync(AddStageRequest request)
         {
