@@ -41,6 +41,7 @@ try
     builder.Services.AddScoped<AdminUserService>();
     builder.Services.AddScoped<AuthorizationService>();
     builder.Services.AddScoped<UserProjectService>();
+    builder.Services.AddScoped<AddAdminService>();
     builder.Services.AddAuthorization();
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
